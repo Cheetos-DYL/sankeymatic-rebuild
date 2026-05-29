@@ -1,0 +1,207 @@
+.diagram-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--spacing-lg);
+  gap: var(--spacing-md);
+  overflow: auto;
+}
+
+.diagram-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  background: var(--color-block-cream);
+  border-radius: var(--rounded-lg);
+  text-align: center;
+  max-width: 90vw;
+}
+
+.diagram-empty__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-headline-size);
+  font-weight: var(--text-headline-weight);
+  line-height: var(--text-headline-line);
+  letter-spacing: var(--text-headline-tracking);
+  color: var(--color-ink);
+  margin-bottom: var(--spacing-md);
+}
+
+.diagram-empty__text {
+  font-family: var(--font-sans);
+  font-size: var(--text-body-lg-size);
+  font-weight: var(--text-body-lg-weight);
+  line-height: var(--text-body-lg-line);
+  color: var(--color-ink);
+  max-width: 400px;
+}
+
+.diagram-empty__code {
+  display: inline-block;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-canvas);
+  border: var(--spacing-hair) solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.diagram-svg {
+  width: 100%;
+  height: auto;
+  max-height: 55vh;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Toggle bar */
+.diagram-toggle {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.diagram-toggle__btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-surface-soft);
+  border: var(--spacing-hair) solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.diagram-toggle__btn:hover {
+  background: var(--color-hairline);
+}
+
+.diagram-toggle__icon {
+  font-size: 10px;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.diagram-toggle__label {
+  flex: 1;
+}
+
+.diagram-toggle__badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--rounded-pill);
+  font-weight: 500;
+}
+
+.diagram-flows path {
+  transition: opacity 0.15s ease;
+}
+
+/* Export bar */
+.export-bar {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-pill {
+  padding: 8px 20px;
+  font-family: var(--font-sans);
+  font-size: var(--text-button-size);
+  font-weight: var(--text-button-weight);
+  line-height: var(--text-button-line);
+  letter-spacing: var(--text-button-tracking);
+  border-radius: var(--rounded-pill);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.btn-pill:hover {
+  opacity: 0.85;
+}
+
+.btn-pill--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.btn-pill--secondary {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: var(--spacing-hair) solid var(--color-primary);
+}
+
+.btn-pill--small {
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 450;
+  border: var(--spacing-hair) solid var(--color-hairline);
+  border-radius: var(--rounded-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-pill--small:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+  .diagram-stage {
+    padding: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+
+  .diagram-svg {
+    max-height: 35vh;
+  }
+
+  .diagram-toggle__btn {
+    padding: 10px var(--spacing-sm);
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .diagram-empty {
+    padding: var(--spacing-md);
+    max-width: 95vw;
+  }
+
+  .diagram-empty__title {
+    font-size: clamp(18px, 4.5vw, 22px);
+  }
+
+  .btn-pill {
+    padding: 6px 16px;
+    font-size: 15px;
+    min-height: 40px;
+  }
+}

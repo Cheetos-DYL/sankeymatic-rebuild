@@ -1,0 +1,129 @@
+/* ==========================================
+   SankeyMATIC Rebuild — Design System
+   Based on Figma Marketing Design Language
+   ========================================== */
+
+:root {
+  /* ── Font Families ── */
+  --font-sans: 'Inter', 'Inter Fallback', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* ── Brand & Accent ── */
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-accent-magenta: #eb3b6b;
+
+  /* ── Surface ── */
+  --color-canvas: #ffffff;
+  --color-inverse-canvas: #000000;
+  --color-surface-soft: #f5f5f5;
+  --color-hairline: #e5e5e5;
+  --color-hairline-soft: #f0f0f0;
+
+  /* ── Block Colors (pastel sections) ── */
+  --color-block-lime: #e8f5d6;
+  --color-block-lilac: #ede3f2;
+  --color-block-cream: #faf7f2;
+  --color-block-mint: #daf2e8;
+  --color-block-pink: #fce4ec;
+  --color-block-coral: #fde8df;
+  --color-block-navy: #1a1d2e;
+
+  /* ── Text ── */
+  --color-ink: #000000;
+  --color-inverse-ink: #ffffff;
+  --color-on-inverse-soft: #ffffff;
+
+  /* ── Semantic ── */
+  --color-success: #2e7d32;
+  --color-overlay-scrim: #000000;
+
+  /* ── Typography ── */
+  --text-display-xl-size: 86px;
+  --text-display-xl-weight: 340;
+  --text-display-xl-line: 1.00;
+  --text-display-xl-tracking: -0.02em;
+
+  --text-display-lg-size: 64px;
+  --text-display-lg-weight: 340;
+  --text-display-lg-line: 1.10;
+  --text-display-lg-tracking: -0.015em;
+
+  --text-headline-size: 26px;
+  --text-headline-weight: 540;
+  --text-headline-line: 1.35;
+  --text-headline-tracking: -0.01em;
+
+  --text-subhead-size: 26px;
+  --text-subhead-weight: 340;
+  --text-subhead-line: 1.35;
+  --text-subhead-tracking: -0.01em;
+
+  --text-card-title-size: 24px;
+  --text-card-title-weight: 700;
+  --text-card-title-line: 1.45;
+  --text-card-title-tracking: 0;
+
+  --text-body-lg-size: 20px;
+  --text-body-lg-weight: 330;
+  --text-body-lg-line: 1.40;
+  --text-body-lg-tracking: -0.007em;
+
+  --text-body-size: 18px;
+  --text-body-weight: 320;
+  --text-body-line: 1.45;
+  --text-body-tracking: -0.014em;
+
+  --text-body-sm-size: 16px;
+  --text-body-sm-weight: 330;
+  --text-body-sm-line: 1.45;
+  --text-body-sm-tracking: -0.009em;
+
+  --text-link-size: 20px;
+  --text-link-weight: 480;
+  --text-link-line: 1.40;
+  --text-link-tracking: -0.005em;
+
+  --text-button-size: 20px;
+  --text-button-weight: 480;
+  --text-button-line: 1.40;
+  --text-button-tracking: -0.005em;
+
+  --text-eyebrow-size: 18px;
+  --text-eyebrow-weight: 400;
+  --text-eyebrow-line: 1.30;
+  --text-eyebrow-tracking: 0.03em;
+
+  --text-caption-size: 12px;
+  --text-caption-weight: 400;
+  --text-caption-line: 1.00;
+  --text-caption-tracking: 0.05em;
+
+  /* ── Spacing (8px base) ── */
+  --spacing-hair: 1px;
+  --spacing-xxs: 4px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+  --spacing-section: 96px;
+
+  /* ── Border Radius ── */
+  --rounded-xs: 2px;
+  --rounded-sm: 6px;
+  --rounded-md: 8px;
+  --rounded-lg: 24px;
+  --rounded-xl: 32px;
+  --rounded-pill: 50px;
+  --rounded-full: 9999px;
+
+  /* ── Shadows (used sparingly) ── */
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+  /* ── Layout ── */
+  --container-max: 1280px;
+  --nav-height: 56px;
+}
