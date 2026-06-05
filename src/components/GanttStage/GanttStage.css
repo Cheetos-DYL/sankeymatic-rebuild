@@ -1,0 +1,62 @@
+.gantt-stage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.gantt-stage__scroll {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gantt-svg {
+  display: block;
+  min-width: 100%;
+}
+
+.gantt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--spacing-xxl);
+  text-align: center;
+  color: var(--color-ink);
+  opacity: 0.6;
+}
+
+.gantt-empty__title {
+  font-size: var(--text-headline-size);
+  font-weight: var(--text-headline-weight);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.gantt-empty__text {
+  font-size: var(--text-body-size);
+  margin: 0 0 var(--spacing-md);
+}
+
+.gantt-empty__code {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm-size);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-surface-soft);
+  border-radius: var(--rounded-sm);
+}
+
+.gantt-export-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-surface-soft);
+  border-bottom: var(--spacing-hair) solid var(--color-hairline);
+}
+
+.gantt-export-bar__info {
+  font-size: var(--text-caption-size);
+  color: #666;
+}

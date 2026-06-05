@@ -11,7 +11,11 @@
   flex-direction: column;
   background: var(--color-canvas);
   border-right: var(--spacing-hair) solid var(--color-hairline);
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.sidebar__tabs {
+  flex-shrink: 0;
 }
 
 .sidebar__scroll {
