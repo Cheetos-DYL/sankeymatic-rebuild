@@ -62,8 +62,8 @@ export function parseDiagramInput(
     return !Number.isNaN((n as number) - parseFloat(n as string));
   }
 
-  function warnAbout(line: string, warnMsg: string): void {
-    errors.push({ line, message: warnMsg, row: -1 });
+  function warnAbout(line: string, warnMsg: string, row: number): void {
+    errors.push({ line, message: warnMsg, row });
   }
 
   /**
@@ -201,117 +201,120 @@ export function parseDiagramInput(
   // ---- SECOND PASS: parse flows, nodes, and attributes ----
   let currentObject: { type: string; name: string } | null = null;
 
-  sourceLines
-    .filter((_, i) => !linesWithSettings.has(i))
-    .forEach((lineIn, row) => {
-      // Skip blank or comment lines
-      if (lineIn === '' || reCommentLine.test(lineIn)) {
+  sourceLines.forEach((lineIn, originalRow) => {
+    // Skip settings lines and blank/comment lines
+    if (linesWithSettings.has(originalRow)) return;
+    if (lineIn === '' || reCommentLine.test(lineIn)) {
+      return;
+    }
+
+    // Node line (loose): ":Name #color[.opacity]"
+    let matches = lineIn.match(reNodeLineLoose);
+    if (matches !== null) {
+      const nodeName = matches[1].trim();
+      updateNodeAttrs({
+        name: nodeName,
+        color: matches[2] || '',
+        opacity: matches[3] || '',
+        paintInputs: [matches[4] || '', matches[5] || ''],
+        sourceRow: originalRow,
+      });
+      currentObject = { type: NODE_OBJ, name: nodeName };
+      return;
+    }
+
+    // Node line (strict): "node Name"
+    matches = lineIn.match(reNodeLineStrict);
+    if (matches !== null) {
+      const nodeName = matches[1].trim();
+      updateNodeAttrs({
+        name: nodeName,
+        sourceRow: originalRow,
+      });
+      currentObject = { type: NODE_OBJ, name: nodeName };
+      return;
+    }
+
+    // Flow line: "Source [amount] Target[ #color]"
+    matches = lineIn.match(reFlowLine);
+    if (matches !== null) {
+      const amountIn = matches[2].replace(/\s/g, '');
+      const isCalculated = flowIsCalculated(amountIn);
+      currentObject = null;
+
+      // Blank amount -> skip with log
+      if (amountIn === '') {
         return;
       }
 
-      // Node line (loose): ":Name #color[.opacity]"
-      let matches = lineIn.match(reNodeLineLoose);
-      if (matches !== null) {
-        const nodeName = matches[1].trim();
-        updateNodeAttrs({
-          name: nodeName,
-          color: matches[2] || '',
-          opacity: matches[3] || '',
-          paintInputs: [matches[4] || '', matches[5] || ''],
-          sourceRow: row,
-        });
-        currentObject = { type: NODE_OBJ, name: nodeName };
-        return;
-      }
-
-      // Node line (strict): "node Name"
-      matches = lineIn.match(reNodeLineStrict);
-      if (matches !== null) {
-        const nodeName = matches[1].trim();
-        updateNodeAttrs({
-          name: nodeName,
-          sourceRow: row,
-        });
-        currentObject = { type: NODE_OBJ, name: nodeName };
-        return;
-      }
-
-      // Flow line: "Source [amount] Target[ #color]"
-      matches = lineIn.match(reFlowLine);
-      if (matches !== null) {
-        const amountIn = matches[2].replace(/\s/g, '');
-        const isCalculated = flowIsCalculated(amountIn);
-        currentObject = null;
-
-        // Blank amount -> skip with log
-        if (amountIn === '') {
-          return;
-        }
-
-        // Reject non-numeric amounts
-        if (!isNumeric(amountIn) && !isCalculated) {
-          warnAbout(
-            lineIn,
-            `The [Amount] must be a number or a wildcard (* or ?)`,
-          );
-          return;
-        }
-
-        // Reject negative amounts
-        if (Number(amountIn) < 0) {
-          warnAbout(lineIn, 'Amounts must not be negative');
-          return;
-        }
-
-        goodFlows.push({
-          source: matches[1].trim(),
-          target: matches[3].trim(),
-          amount: amountIn,
-          sourceRow: row,
-          operation: isCalculated ? amountIn : null,
-        });
-
-        // Track max decimal places
-        maxDecimalPlaces = Math.max(
-          maxDecimalPlaces,
-          (amountIn.split('.')[1] || '').length,
+      // Reject non-numeric amounts
+      if (!isNumeric(amountIn) && !isCalculated) {
+        warnAbout(
+          lineIn,
+          `The [Amount] must be a number or a wildcard (* or ?)`,
+          originalRow,
         );
         return;
       }
 
-      // Attribute line: ".label 'value'"
-      matches = lineIn.match(reAttributeLine);
-      if (matches !== null) {
-        if (!currentObject) {
-          warnAbout(
-            lineIn,
-            'Found an Attribute without a preceding Node declaration',
-          );
-          return;
-        }
-        const [, attrName, attrValue] = matches;
-        if (
-          !validAttributes.get(currentObject.type)?.has(attrName)
-        ) {
-          warnAbout(
-            lineIn,
-            `Attribute type ${attrName} is not valid for Nodes`,
-          );
-        } else if (currentObject.type === NODE_OBJ) {
-          updateNodeAttrs({
-            name: currentObject.name,
-            [attrName]: attrValue,
-          });
-        }
+      // Reject negative amounts
+      if (Number(amountIn) < 0) {
+        warnAbout(lineIn, 'Amounts must not be negative', originalRow);
         return;
       }
 
-      // Unrecognized non-blank line
-      warnAbout(
-        lineIn,
-        'Does not match the format of a Flow, Node, Attribute, or Setting',
+      goodFlows.push({
+        source: matches[1].trim(),
+        target: matches[3].trim(),
+        amount: amountIn,
+        sourceRow: originalRow,
+        operation: isCalculated ? amountIn : null,
+      });
+
+      // Track max decimal places
+      maxDecimalPlaces = Math.max(
+        maxDecimalPlaces,
+        (amountIn.split('.')[1] || '').length,
       );
-    });
+      return;
+    }
+
+    // Attribute line: ".label 'value'"
+    matches = lineIn.match(reAttributeLine);
+    if (matches !== null) {
+      if (!currentObject) {
+        warnAbout(
+          lineIn,
+          'Found an Attribute without a preceding Node declaration',
+          originalRow,
+        );
+        return;
+      }
+      const [, attrName, attrValue] = matches;
+      if (
+        !validAttributes.get(currentObject.type)?.has(attrName)
+      ) {
+        warnAbout(
+          lineIn,
+          `Attribute type ${attrName} is not valid for Nodes`,
+          originalRow,
+        );
+      } else if (currentObject.type === NODE_OBJ) {
+        updateNodeAttrs({
+          name: currentObject.name,
+          [attrName]: attrValue,
+        });
+      }
+      return;
+    }
+
+    // Unrecognized non-blank line
+    warnAbout(
+      lineIn,
+      'Does not match the format of a Flow, Node, Attribute, or Setting',
+      originalRow,
+    );
+  });
 
   // ---- Build final flow list with resolved node references ----
   const approvedFlows: SankeyFlow[] = goodFlows.map((flow) => {

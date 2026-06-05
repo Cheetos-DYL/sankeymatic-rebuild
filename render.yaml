@@ -1,0 +1,9 @@
+services:
+  - type: static_site
+    name: sankeymatic-rebuild
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
