@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react'
 import './GanttStage.css'
 
 interface GanttTask {
@@ -25,7 +26,6 @@ const SECTION_COLORS: Record<string, string> = {
 
 function getSectionColor(section?: string): string {
   if (section && SECTION_COLORS[section]) return SECTION_COLORS[section]
-  // Generate a color from the section name
   if (section) {
     let hash = 0
     for (let i = 0; i < section.length; i++) {
@@ -41,17 +41,57 @@ function parseDate(dateStr: string): Date {
   return new Date(dateStr + 'T00:00:00')
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
-}
-
 function addDays(date: Date, days: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
   return result
 }
 
-export function GanttStage({ tasks, projectDate }: GanttStageProps) {
+function formatDisplayDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+}
+
+export function GanttStage({ tasks }: GanttStageProps) {
+  const svgRef = useRef<SVGSVGElement>(null)
+
+  const handleExportPNG = useCallback(() => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+    const svgData = new XMLSerializer().serializeToString(svgEl)
+    const canvas = document.createElement('canvas')
+    const scale = 2
+    const vbW = svgEl.viewBox.baseVal.width || svgEl.clientWidth
+    const vbH = svgEl.viewBox.baseVal.height || svgEl.clientHeight
+    canvas.width = vbW * scale
+    canvas.height = vbH * scale
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const img = new Image()
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const url = canvas.toDataURL('image/png')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gantt-chart-${Date.now()}.png`
+      a.click()
+    }
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+  }, [])
+
+  const handleExportSVG = useCallback(() => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+    const svgData = new XMLSerializer().serializeToString(svgEl)
+    const blob = new Blob([svgData], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `gantt-chart-${Date.now()}.svg`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
   if (tasks.length === 0) {
     return (
       <div className="gantt-stage">
@@ -87,18 +127,9 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
   const svgWidth = labelWidth + chartWidth + 20
   const svgHeight = headerHeight + tasks.length * rowHeight + 20
 
-  // Group tasks by section for visual grouping
-  const sections = new Map<string, GanttTask[]>()
-  tasks.forEach(t => {
-    const section = t.section || 'Default'
-    if (!sections.has(section)) sections.set(section, [])
-    sections.get(section)!.push(t)
-  })
-
   // Generate week markers
   const weekMarkers: { x: number; label: string }[] = []
   let currentWeekStart = new Date(chartStart)
-  // Align to Monday
   const dayOfWeek = currentWeekStart.getDay()
   currentWeekStart.setDate(currentWeekStart.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
   
@@ -113,13 +144,24 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
     currentWeekStart = addDays(currentWeekStart, 7)
   }
 
+  // Build today marker position
+  const today = new Date()
+  const todayDaysFromStart = Math.ceil((today.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+  const todayX = labelWidth + todayDaysFromStart * dayWidth
+  const showTodayMarker = todayX >= labelWidth && todayX <= svgWidth - 20
+
   return (
     <div className="gantt-stage">
       <div className="gantt-export-bar">
         <span className="gantt-export-bar__info">{tasks.length} tasks • {totalDays} days</span>
+        <div className="gantt-export-bar__actions">
+          <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>Download PNG</button>
+          <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>Download SVG</button>
+        </div>
       </div>
       <div className="gantt-stage__scroll">
         <svg
+          ref={svgRef}
           width={svgWidth}
           height={svgHeight}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -151,6 +193,30 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
               </g>
             ))}
           </g>
+
+          {/* Today marker */}
+          {showTodayMarker && (
+            <g className="gantt-today">
+              <line
+                x1={todayX} y1={headerHeight}
+                x2={todayX} y2={svgHeight}
+                stroke="#F44336"
+                strokeWidth={2}
+                strokeDasharray="4 2"
+              />
+              <text
+                x={todayX}
+                y={headerHeight - 4}
+                fontSize={10}
+                fill="#F44336"
+                textAnchor="middle"
+                fontFamily="var(--font-sans)"
+                fontWeight={600}
+              >
+                TODAY
+              </text>
+            </g>
+          )}
 
           {/* Task rows */}
           {tasks.map((task, i) => {
@@ -191,7 +257,7 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
                   />
                 )}
 
-                {/* Task bar */}
+                {/* Task bar with tooltip */}
                 <rect
                   x={barX}
                   y={y + 6}
@@ -200,7 +266,9 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
                   rx={4}
                   fill={color}
                   opacity={0.85}
-                />
+                >
+                  <title>{`${task.name}: ${formatDisplayDate(taskStart)} → ${formatDisplayDate(taskEnd)} (${task.durationDays}d)`}</title>
+                </rect>
 
                 {/* Duration label on bar */}
                 {barWidth > 40 && (
@@ -212,6 +280,7 @@ export function GanttStage({ tasks, projectDate }: GanttStageProps) {
                     textAnchor="middle"
                     fontFamily="var(--font-sans)"
                     fontWeight={500}
+                    pointerEvents="none"
                   >
                     {task.durationDays}d
                   </text>
