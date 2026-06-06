@@ -26,6 +26,7 @@ export interface GanttTask {
   endDate: string
   durationDays: number
   color: string
+  dependsOn?: number  // Task ID this depends on
 }
 
 export interface GanttParseResult {
@@ -176,6 +177,7 @@ export function parseGanttInput(input: string): GanttParseResult {
           let startDate: string
           
           // Check if start is "after #N" (relative)
+          let dependsOn: number | undefined
           const afterMatch = startPart.match(/^after\s+#(\d+)$/i)
           if (afterMatch) {
             const refId = parseInt(afterMatch[1], 10)
@@ -185,6 +187,7 @@ export function parseGanttInput(input: string): GanttParseResult {
               continue
             }
             startDate = addDays(refTask.endDate, 1)
+            dependsOn = refId
           } else {
             // Absolute date
             const dateCheck = startPart.match(/^\d{4}-\d{2}-\d{2}$/)
@@ -206,6 +209,7 @@ export function parseGanttInput(input: string): GanttParseResult {
             endDate,
             durationDays,
             color,
+            dependsOn,
           })
         } else {
           errors.push({ line, message: 'Task needs start and duration separated by |', row: i })

@@ -9,6 +9,7 @@ interface GanttTask {
   endDate: string
   durationDays: number
   color: string
+  dependsOn?: number
 }
 
 interface GanttStageProps {
@@ -170,6 +171,20 @@ export function GanttStage({ tasks }: GanttStageProps) {
           {/* Background */}
           <rect width={svgWidth} height={svgHeight} fill="white" />
 
+          {/* Arrow marker definition for dependency arrows */}
+          <defs>
+            <marker
+              id="arrowhead"
+              markerWidth="8"
+              markerHeight="6"
+              refX="8"
+              refY="3"
+              orient="auto"
+            >
+              <polygon points="0 0, 8 3, 0 6" fill="#999" />
+            </marker>
+          </defs>
+
           {/* Header: date labels */}
           <g className="gantt-header">
             <rect x={0} y={0} width={svgWidth} height={headerHeight} fill="#f8f9fa" />
@@ -285,6 +300,43 @@ export function GanttStage({ tasks }: GanttStageProps) {
                     {task.durationDays}d
                   </text>
                 )}
+              </g>
+            )
+          })}
+
+          {/* Dependency arrows */}
+          {tasks.map((task, i) => {
+            if (!task.dependsOn) return null
+            const depTask = tasks.find(t => t.id === task.dependsOn)
+            if (!depTask) return null
+
+            const depIndex = tasks.indexOf(depTask)
+            const depY = headerHeight + depIndex * rowHeight + rowHeight / 2
+            const taskY = headerHeight + i * rowHeight + rowHeight / 2
+
+            // End of dependency task bar
+            const depEnd = parseDate(depTask.endDate)
+            const depEndDays = Math.ceil((depEnd.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+            const fromX = labelWidth + depEndDays * dayWidth + dayWidth * 0.5
+
+            // Start of this task bar
+            const taskStart = parseDate(task.startDate)
+            const taskStartDays = Math.ceil((taskStart.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+            const toX = labelWidth + taskStartDays * dayWidth
+
+            // Draw a curved arrow
+            const midX = (fromX + toX) / 2
+            const path = `M${fromX} ${depY} C${midX} ${depY} ${midX} ${taskY} ${toX} ${taskY}`
+
+            return (
+              <g key={`dep-${task.id}`}>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="#999"
+                  strokeWidth={1.5}
+                  markerEnd="url(#arrowhead)"
+                />
               </g>
             )
           })}
