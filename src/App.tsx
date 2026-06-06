@@ -33,6 +33,15 @@ function App() {
     [ganttText]
   )
 
+  // Merge timeline config from parser into ganttConfig (parser can override settings)
+  const effectiveGanttConfig = useMemo(() => {
+    const merged = { ...ganttConfig }
+    if (ganttResult.timelineConfig?.timelineUnit) {
+      merged.timelineUnit = ganttResult.timelineConfig.timelineUnit
+    }
+    return merged
+  }, [ganttConfig, ganttResult.timelineConfig])
+
   const handleInputChange = useCallback((value: string) => {
     setInputText(value)
   }, [])
@@ -96,7 +105,7 @@ function App() {
         errors={ganttResult.errors}
       />
       <GanttControlsPanel
-        config={ganttConfig}
+        config={effectiveGanttConfig}
         onChange={handleGanttConfigChange}
       />
     </>
@@ -117,7 +126,7 @@ function App() {
       tasks={ganttResult.tasks}
       projectDate={ganttResult.projectDate}
       title={ganttResult.title}
-      config={ganttConfig}
+      config={effectiveGanttConfig}
     />
   )
 

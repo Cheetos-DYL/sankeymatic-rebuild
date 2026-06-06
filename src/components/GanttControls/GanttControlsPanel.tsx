@@ -12,6 +12,11 @@ export interface GanttConfig {
   showGridLines: boolean
   bgTransparent: boolean
   bgColor: string
+  timelineUnit: 'day' | 'month' | 'quarter' | 'halfyear' | 'year'
+  fyStartMonth: number  // 1-12, default 4 (April for UK)
+  fyLabelType: 'fy' | 'full' | 'both'
+  exportWidth: number
+  exportHeight: number
 }
 
 export const DEFAULT_GANTT_CONFIG: GanttConfig = {
@@ -24,6 +29,11 @@ export const DEFAULT_GANTT_CONFIG: GanttConfig = {
   showGridLines: true,
   bgTransparent: false,
   bgColor: '#ffffff',
+  timelineUnit: 'month',
+  fyStartMonth: 4,
+  fyLabelType: 'fy',
+  exportWidth: 1920,
+  exportHeight: 1080,
 }
 
 interface GanttControlsProps {
@@ -92,6 +102,75 @@ export function GanttControlsPanel({ config, onChange }: GanttControlsProps) {
           <input type="checkbox" checked={config.showGridLines}
             onChange={e => onChange({ showGridLines: e.target.checked })} />
           Show grid lines
+        </label>
+      </CollapsibleSection>
+
+      {/* === TIMELINE === */}
+      <CollapsibleSection title="Timeline">
+        <fieldset className="control-radio-group">
+          <legend>Timeline unit</legend>
+          {[
+            ['day', 'Day'],
+            ['month', 'Month'],
+            ['quarter', 'Quarter'],
+            ['halfyear', 'Half-Year'],
+            ['year', 'Year'],
+          ].map(([val, label]) => (
+            <label key={val} className="control-radio">
+              <input type="radio" name="gantt_timeline_unit" value={val}
+                checked={config.timelineUnit === val}
+                onChange={() => onChange({ timelineUnit: val as GanttConfig['timelineUnit'] })} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+
+        <label className="control-select">
+          <span className="control-select__label">FY start month</span>
+          <select value={config.fyStartMonth}
+            onChange={e => onChange({ fyStartMonth: Number(e.target.value) })}>
+            {[
+              [1, 'January'], [2, 'February'], [3, 'March'], [4, 'April'],
+              [5, 'May'], [6, 'June'], [7, 'July'], [8, 'August'],
+              [9, 'September'], [10, 'October'], [11, 'November'], [12, 'December'],
+            ].map(([val, name]) => (
+              <option key={val} value={val}>{name}</option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className="control-radio-group">
+          <legend>FY label format</legend>
+          {[
+            ['fy', 'FY27 Q1'],
+            ['full', 'Apr-Jun 2026'],
+            ['both', 'FY27 Q1 (Apr-Jun)'],
+          ].map(([val, label]) => (
+            <label key={val} className="control-radio">
+              <input type="radio" name="gantt_fy_label" value={val}
+                checked={config.fyLabelType === val}
+                onChange={() => onChange({ fyLabelType: val as GanttConfig['fyLabelType'] })} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      </CollapsibleSection>
+
+      {/* === EXPORT SIZE === */}
+      <CollapsibleSection title="Export Size" defaultOpen={false}>
+        <label className="control-input">
+          <span className="control-input__label">Width (px)</span>
+          <input type="number" className="control-input__field"
+            min={320} max={7680} step={10}
+            value={config.exportWidth}
+            onChange={e => onChange({ exportWidth: Math.max(320, Number(e.target.value) || 1920) })} />
+        </label>
+        <label className="control-input">
+          <span className="control-input__label">Height (px)</span>
+          <input type="number" className="control-input__field"
+            min={240} max={4320} step={10}
+            value={config.exportHeight}
+            onChange={e => onChange({ exportHeight: Math.max(240, Number(e.target.value) || 1080) })} />
         </label>
       </CollapsibleSection>
 

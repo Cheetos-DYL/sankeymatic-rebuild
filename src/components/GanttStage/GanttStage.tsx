@@ -10,6 +10,7 @@ interface GanttTask {
   durationDays: number
   color: string
   dependsOn?: number
+  states?: string[]
 }
 
 interface GanttStageProps {
@@ -26,6 +27,11 @@ interface GanttStageProps {
     showGridLines: boolean
     bgTransparent: boolean
     bgColor: string
+    timelineUnit: 'day' | 'month' | 'quarter' | 'halfyear' | 'year'
+    fyStartMonth: number
+    fyLabelType: 'fy' | 'full' | 'both'
+    exportWidth: number
+    exportHeight: number
   }
 }
 
@@ -84,6 +90,13 @@ function addDays(date: Date, days: number): Date {
   return result
 }
 
+function formatDateStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function formatDisplayDate(date: Date, dateFormat: string): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -93,6 +106,217 @@ function formatDisplayDate(date: Date, dateFormat: string): string {
     case 'eu': return `${d}.${m}.${y}`
     default: return `${y}-${m}-${d}`
   }
+}
+
+/* ─── Financial Year helpers ─── */
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Get FY number and quarter for a given date */
+function getFYInfo(date: Date, fyStartMonth: number): { fy: number; quarter: number; monthInFY: number } {
+  const month = date.getMonth() + 1 // 1-12
+  const year = date.getFullYear()
+
+  // Months in FY order starting from fyStartMonth
+  const monthOffset = ((month - fyStartMonth + 12) % 12) // 0-11
+  const quarter = Math.floor(monthOffset / 3) + 1 // 1-4
+  const monthInFY = monthOffset + 1 // 1-12
+
+  // FY number is the calendar year of the FY's ending month
+  // e.g. if FY starts April, FY27 = April 2026 - March 2027
+  let fy: number
+  if (fyStartMonth === 1) {
+    // Calendar year FY (Jan start)
+    fy = year
+  } else if (month >= fyStartMonth) {
+    // We're in the first 12 months of this FY
+    fy = year + 1 - Math.floor((12 - (13 - fyStartMonth)) / 12)
+    // Simpler: FY year is the year the FY ends
+    fy = year + 1
+    if (month >= fyStartMonth && month <= 12) {
+      fy = year + 1
+    } else {
+      fy = year
+    }
+  } else {
+    fy = year
+  }
+
+  // Simpler logic: if current month >= fyStartMonth, FY ends next year
+  if (month >= fyStartMonth) {
+    fy = year + 1
+  } else {
+    fy = year
+  }
+
+  return { fy, quarter, monthInFY }
+}
+
+/** Get the FY label for a date */
+function getFYLabel(date: Date, fyStartMonth: number, labelType: 'fy' | 'full' | 'both'): string {
+  const { fy, quarter } = getFYInfo(date, fyStartMonth)
+
+  if (labelType === 'full') {
+    // Get the month range for this quarter in FY
+    const qStartMonth = ((fyStartMonth - 1 + (quarter - 1) * 3) % 12)
+    const qEndMonth = (qStartMonth + 2) % 12
+    const startName = MONTH_NAMES[qStartMonth]
+    const endName = MONTH_NAMES[qEndMonth]
+    const startYear = qStartMonth >= fyStartMonth - 1 ? fy - 1 : fy
+    return `${startName}-${endName} ${startYear + (qEndMonth >= fyStartMonth - 1 ? 1 : 0)}`
+  }
+
+  if (labelType === 'both') {
+    const qStartMonth = ((fyStartMonth - 1 + (quarter - 1) * 3) % 12)
+    const qEndMonth = (qStartMonth + 2) % 12
+    const startName = MONTH_NAMES[qStartMonth]
+    const endName = MONTH_NAMES[qEndMonth]
+    const startYear = qStartMonth >= fyStartMonth - 1 ? fy - 1 : fy
+    return `FY${String(fy).slice(-2)} Q${quarter} (${startName}-${endName})`
+  }
+
+  return `FY${String(fy).slice(-2)} Q${quarter}`
+}
+
+/** Get half-year label */
+function getHalfYearLabel(date: Date, fyStartMonth: number, labelType: 'fy' | 'full' | 'both'): string {
+  const { fy } = getFYInfo(date, fyStartMonth)
+  const month = date.getMonth() + 1
+  const monthOffset = ((month - fyStartMonth + 12) % 12)
+  const half = monthOffset < 6 ? 1 : 2
+
+  if (labelType === 'full') {
+    const hStartMonth = ((fyStartMonth - 1 + (half - 1) * 6) % 12)
+    const hEndMonth = (hStartMonth + 5) % 12
+    const startName = MONTH_NAMES[hStartMonth]
+    const endName = MONTH_NAMES[hEndMonth]
+    const year = hStartMonth >= fyStartMonth - 1 ? fy - 1 : fy
+    return `${startName}-${endName} ${year + (hEndMonth >= fyStartMonth - 1 ? 1 : 0)}`
+  }
+
+  if (labelType === 'both') {
+    return `FY${String(fy).slice(-2)} H${half}`
+  }
+
+  return `FY${String(fy).slice(-2)} H${half}`
+}
+
+/** Generate timeline markers based on unit */
+interface TimelineMarker {
+  x: number
+  label: string
+  date: Date
+}
+
+function generateTimelineMarkers(
+  chartStart: Date,
+  chartEnd: Date,
+  totalDays: number,
+  dayWidth: number,
+  labelWidth: number,
+  timelineUnit: string,
+  fyStartMonth: number,
+  fyLabelType: 'fy' | 'full' | 'both',
+): TimelineMarker[] {
+  const markers: TimelineMarker[] = []
+
+  if (timelineUnit === 'day') {
+    // Daily markers — show every 7 days to avoid clutter
+    let current = new Date(chartStart)
+    while (current <= chartEnd) {
+      const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysFromStart >= 0) {
+        markers.push({
+          x: labelWidth + daysFromStart * dayWidth,
+          label: `${current.getMonth() + 1}/${current.getDate()}`,
+          date: new Date(current),
+        })
+      }
+      current = addDays(current, 7)
+    }
+  } else if (timelineUnit === 'month') {
+    // Monthly markers
+    let current = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1)
+    while (current <= chartEnd) {
+      const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysFromStart >= 0) {
+        markers.push({
+          x: labelWidth + daysFromStart * dayWidth,
+          label: `${current.getMonth() + 1}/${current.getDate()}`,
+          date: new Date(current),
+        })
+      }
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+    }
+  } else if (timelineUnit === 'quarter') {
+    // Quarterly markers (aligned to FY)
+    let current = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1)
+    // Align to FY quarter boundary
+    const monthOffset = ((current.getMonth() + 1 - fyStartMonth + 12) % 12)
+    const quarterInFY = Math.floor(monthOffset / 3)
+    current = new Date(current.getFullYear(), fyStartMonth - 1 + quarterInFY * 3, 1)
+    if (current > chartStart) {
+      current = addDays(current, -1)
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+    }
+
+    while (current <= chartEnd) {
+      const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysFromStart >= 0) {
+        markers.push({
+          x: labelWidth + daysFromStart * dayWidth,
+          label: getFYLabel(current, fyStartMonth, fyLabelType),
+          date: new Date(current),
+        })
+      }
+      current = new Date(current.getFullYear(), current.getMonth() + 3, 1)
+    }
+  } else if (timelineUnit === 'halfyear') {
+    // Half-year markers
+    let current = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1)
+    // Align to FY half-year boundary
+    const monthOffset = ((current.getMonth() + 1 - fyStartMonth + 12) % 12)
+    const halfInFY = Math.floor(monthOffset / 6)
+    current = new Date(current.getFullYear(), fyStartMonth - 1 + halfInFY * 6, 1)
+    if (current > chartStart) {
+      current = addDays(current, -1)
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+    }
+
+    while (current <= chartEnd) {
+      const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysFromStart >= 0) {
+        markers.push({
+          x: labelWidth + daysFromStart * dayWidth,
+          label: getHalfYearLabel(current, fyStartMonth, fyLabelType),
+          date: new Date(current),
+        })
+      }
+      current = new Date(current.getFullYear(), current.getMonth() + 6, 1)
+    }
+  } else if (timelineUnit === 'year') {
+    // Year markers
+    let current = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
+    if (current > chartStart) {
+      current = addDays(current, -1)
+      current = new Date(current.getFullYear() + 1, fyStartMonth - 1, 1)
+    }
+
+    while (current <= chartEnd) {
+      const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysFromStart >= 0) {
+        const { fy } = getFYInfo(current, fyStartMonth)
+        markers.push({
+          x: labelWidth + daysFromStart * dayWidth,
+          label: labelType === 'full' ? `FY${fy}` : `FY${String(fy).slice(-2)}`,
+          date: new Date(current),
+        })
+      }
+      current = new Date(current.getFullYear() + 1, fyStartMonth - 1, 1)
+    }
+  }
+
+  return markers
 }
 
 export function GanttStage({ tasks, title, config }: GanttStageProps) {
@@ -105,6 +329,9 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
   const showGridLines = config?.showGridLines ?? true
   const bgTransparent = config?.bgTransparent ?? false
   const bgColor = config?.bgColor || '#ffffff'
+  const timelineUnit = config?.timelineUnit || 'month'
+  const fyStartMonth = config?.fyStartMonth || 4
+  const fyLabelType = config?.fyLabelType || 'fy'
   const svgRef = useRef<SVGSVGElement>(null)
 
   const handleExportPNG = useCallback(() => {
@@ -150,7 +377,6 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
     if (tasks.length === 0) return
     const container = scrollContainerRef.current
     if (!container) return
-    // Scroll to today marker position after a short delay for layout
     const timer = setTimeout(() => {
       const today = new Date()
       const allDates = tasks.flatMap(t => [parseDate(t.startDate), parseDate(t.endDate)])
@@ -169,10 +395,15 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
         <div className="gantt-empty">
           <h2 className="gantt-empty__title">Build a Gantt Chart</h2>
           <p className="gantt-empty__text">
-            Enter tasks using the text editor on the left.
+            Enter tasks using Mermaid Gantt syntax on the left.
           </p>
           <code className="gantt-empty__code">
-            [Name] Start ~ Duration
+            gantt<br/>
+            &nbsp;&nbsp;title Project Timeline<br/>
+            &nbsp;&nbsp;dateFormat YYYY-MM-DD<br/>
+            <br/>
+            &nbsp;&nbsp;section Planning<br/>
+            &nbsp;&nbsp;Research :a1, 2026-01-01, 15d
           </code>
         </div>
       </div>
@@ -183,7 +414,7 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
   const allDates = tasks.flatMap(t => [parseDate(t.startDate), parseDate(t.endDate)])
   const minDate = new Date(Math.min(...allDates.map(d => d.getTime())))
   const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())))
-  
+
   // Add padding days
   const chartStart = addDays(minDate, -3)
   const chartEnd = addDays(maxDate, 3)
@@ -196,22 +427,11 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
   const svgWidth = labelWidth + chartWidth + 20
   const svgHeight = headerHeight + tasks.length * rowHeight + 20
 
-  // Generate week markers
-  const weekMarkers: { x: number; label: string }[] = []
-  let currentWeekStart = new Date(chartStart)
-  const dayOfWeek = currentWeekStart.getDay()
-  currentWeekStart.setDate(currentWeekStart.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  
-  while (currentWeekStart <= chartEnd) {
-    const daysFromStart = Math.ceil((currentWeekStart.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysFromStart >= 0) {
-      weekMarkers.push({
-        x: labelWidth + daysFromStart * dayWidth,
-        label: `${currentWeekStart.getMonth() + 1}/${currentWeekStart.getDate()}`,
-      })
-    }
-    currentWeekStart = addDays(currentWeekStart, 7)
-  }
+  // Generate timeline markers based on unit setting
+  const timelineMarkers = generateTimelineMarkers(
+    chartStart, chartEnd, totalDays, dayWidth, labelWidth,
+    timelineUnit, fyStartMonth, fyLabelType,
+  )
 
   // Build today marker position
   const today = new Date()
@@ -224,7 +444,7 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
       <div className="gantt-export-bar">
         <span className="gantt-export-bar__info">
           {title && <strong className="gantt-export-bar__title">{title} • </strong>}
-          {tasks.length} tasks • {totalDays} days
+          {tasks.length} tasks • {totalDays} days • {timelineUnit} view
         </span>
         <div className="gantt-export-bar__actions">
           <button className="btn-pill btn-pill--secondary" onClick={() => {
@@ -282,11 +502,11 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
             </marker>
           </defs>
 
-          {/* Header: date labels */}
+          {/* Header: timeline markers */}
           <g className="gantt-header">
             <rect x={0} y={0} width={svgWidth} height={headerHeight} fill="#f8f9fa" />
-            {weekMarkers.map((marker, i) => (
-              <g key={`week-${i}`}>
+            {timelineMarkers.map((marker, i) => (
+              <g key={`marker-${i}`}>
                 {showGridLines && (
                   <line
                     x1={marker.x} y1={headerHeight}
@@ -298,9 +518,10 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
                 <text
                   x={marker.x + 4}
                   y={headerHeight - 8}
-                  fontSize={11}
+                  fontSize={timelineUnit === 'year' ? 12 : 11}
                   fill="#666"
                   fontFamily="var(--font-sans)"
+                  fontWeight={timelineUnit === 'year' ? 600 : 400}
                 >
                   {marker.label}
                 </text>
@@ -343,6 +564,10 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
             const barWidth = Math.max(durationDays * dayWidth, 8)
             const color = task.color || getSectionColor(task.section || '', colorScheme)
 
+            // Determine opacity based on states
+            const isDone = task.states?.includes('done')
+            const barOpacity = isDone ? 0.5 : 0.85
+
             return (
               <g key={task.id}>
                 {/* Row background */}
@@ -358,6 +583,7 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
                   fontSize={13}
                   fill="#333"
                   fontFamily="var(--font-sans)"
+                  textDecoration={isDone ? 'line-through' : 'none'}
                 >
                   {task.name}
                 </text>
@@ -379,7 +605,7 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
                   height={rowHeight - 12}
                   rx={4}
                   fill={color}
-                  opacity={0.85}
+                  opacity={barOpacity}
                 >
                   <title>{`${task.name}: ${formatDisplayDate(taskStart, dateFormat)} → ${formatDisplayDate(taskEnd, dateFormat)} (${task.durationDays}d)`}</title>
                 </rect>
