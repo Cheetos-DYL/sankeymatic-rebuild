@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import './GanttStage.css'
 
 interface GanttTask {
@@ -144,6 +144,25 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
     URL.revokeObjectURL(url)
   }, [])
 
+  // Auto-scroll to today's date when chart loads
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (tasks.length === 0) return
+    const container = scrollContainerRef.current
+    if (!container) return
+    // Scroll to today marker position after a short delay for layout
+    const timer = setTimeout(() => {
+      const today = new Date()
+      const allDates = tasks.flatMap(t => [parseDate(t.startDate), parseDate(t.endDate)])
+      const minDate = new Date(Math.min(...allDates.map(d => d.getTime())))
+      const chartStart = addDays(minDate, -3)
+      const daysFromStart = Math.ceil((today.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+      const scrollTarget = Math.max(0, daysFromStart * dayWidth - container.clientWidth / 2)
+      container.scrollLeft = scrollTarget
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [tasks, dayWidth])
+
   if (tasks.length === 0) {
     return (
       <div className="gantt-stage">
@@ -208,11 +227,22 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
           {tasks.length} tasks • {totalDays} days
         </span>
         <div className="gantt-export-bar__actions">
+          <button className="btn-pill btn-pill--secondary" onClick={() => {
+            const container = scrollContainerRef.current
+            if (!container) return
+            const today = new Date()
+            const allDates = tasks.flatMap(t => [parseDate(t.startDate), parseDate(t.endDate)])
+            const minDate = new Date(Math.min(...allDates.map(d => d.getTime())))
+            const chartStart = addDays(minDate, -3)
+            const daysFromStart = Math.ceil((today.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
+            const scrollTarget = Math.max(0, daysFromStart * dayWidth - container.clientWidth / 2)
+            container.scrollTo({ left: scrollTarget, behavior: 'smooth' })
+          }}>Today</button>
           <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>Download PNG</button>
           <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>Download SVG</button>
         </div>
       </div>
-      <div className="gantt-stage__scroll">
+      <div className="gantt-stage__scroll" ref={scrollContainerRef}>
         <svg
           ref={svgRef}
           width={svgWidth}
@@ -222,6 +252,21 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
         >
           {/* Background */}
           {!bgTransparent && <rect width={svgWidth} height={svgHeight} fill={bgColor} />}
+
+          {/* Title in SVG */}
+          {title && (
+            <text
+              x={svgWidth / 2}
+              y={headerHeight - 12}
+              fontSize={14}
+              fill="#333"
+              textAnchor="middle"
+              fontFamily="var(--font-sans)"
+              fontWeight={600}
+            >
+              {title}
+            </text>
+          )}
 
           {/* Arrow marker definition for dependency arrows */}
           <defs>

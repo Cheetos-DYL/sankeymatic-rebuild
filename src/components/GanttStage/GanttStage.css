@@ -65,3 +65,28 @@
   font-weight: 600;
   color: #333;
 }
+
+.gantt-export-bar__actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* Mobile improvements */
+@media (max-width: 768px) {
+  .gantt-export-bar {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+  }
+
+  .gantt-export-bar__actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .gantt-export-bar__actions .btn-pill {
+    min-height: 36px;
+    font-size: 13px;
+  }
+}
