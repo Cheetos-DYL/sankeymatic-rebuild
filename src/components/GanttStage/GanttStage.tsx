@@ -295,24 +295,28 @@ function generateTimelineMarkers(
       current = new Date(current.getFullYear(), current.getMonth() + 6, 1)
     }
   } else if (timelineUnit === 'year') {
-    // Year markers
+    // Year markers — find the FY start closest to chartStart
+    // Start from the FY year that contains chartStart
+    const chartStartDate = chartStart.getTime()
     let current = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
-    if (current > chartStart) {
-      current = addDays(current, -1)
-      current = new Date(current.getFullYear() + 1, fyStartMonth - 1, 1)
+    // If this FY start is after chartStart, step back one FY
+    if (current.getTime() > chartStartDate) {
+      current = new Date(current.getFullYear() - 1, fyStartMonth - 1, 1)
     }
-
-    while (current <= chartEnd) {
+    // Safety: limit to 10 iterations
+    let safety = 0
+    while (current.getTime() <= chartEnd.getTime() && safety < 10) {
       const daysFromStart = Math.ceil((current.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
       if (daysFromStart >= 0) {
         const { fy } = getFYInfo(current, fyStartMonth)
         markers.push({
           x: labelWidth + daysFromStart * dayWidth,
-          label: labelType === 'full' ? `FY${fy}` : `FY${String(fy).slice(-2)}`,
+          label: fyLabelType === 'full' ? `FY${fy}` : `FY${String(fy).slice(-2)}`,
           date: new Date(current),
         })
       }
       current = new Date(current.getFullYear() + 1, fyStartMonth - 1, 1)
+      safety++
     }
   }
 

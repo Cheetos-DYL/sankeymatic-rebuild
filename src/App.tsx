@@ -33,14 +33,9 @@ function App() {
     [ganttText]
   )
 
-  // Merge timeline config from parser into ganttConfig (parser can override settings)
-  const effectiveGanttConfig = useMemo(() => {
-    const merged = { ...ganttConfig }
-    if (ganttResult.timelineConfig?.timelineUnit) {
-      merged.timelineUnit = ganttResult.timelineConfig.timelineUnit
-    }
-    return merged
-  }, [ganttConfig, ganttResult.timelineConfig])
+  // Use ganttConfig directly — user controls timeline unit via radio buttons
+  // Parser's timelineConfig is informational only (not used to override UI)
+  const effectiveGanttConfig = ganttConfig
 
   const handleInputChange = useCallback((value: string) => {
     setInputText(value)
