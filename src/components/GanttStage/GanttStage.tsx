@@ -15,18 +15,54 @@ interface GanttTask {
 interface GanttStageProps {
   tasks: GanttTask[]
   projectDate: string
+  title?: string
+  config?: {
+    colorScheme: 'default' | 'pastel' | 'vivid' | 'mono'
+    dateFormat: 'iso' | 'us' | 'eu'
+    rowHeight: number
+    dayWidth: number
+    showToday: boolean
+    showDependencies: boolean
+    showGridLines: boolean
+    bgTransparent: boolean
+    bgColor: string
+  }
 }
 
-const SECTION_COLORS: Record<string, string> = {
-  Planning: '#4CAF50',
-  Design: '#2196F3',
-  Development: '#FF9800',
-  Testing: '#9C27B0',
-  Release: '#F44336',
+const COLOR_SCHEMES: Record<string, Record<string, string>> = {
+  default: {
+    Planning: '#4CAF50',
+    Design: '#2196F3',
+    Development: '#FF9800',
+    Testing: '#9C27B0',
+    Release: '#F44336',
+  },
+  pastel: {
+    Planning: '#81C784',
+    Design: '#90CAF9',
+    Development: '#FFCC80',
+    Testing: '#CE93D8',
+    Release: '#EF9A9A',
+  },
+  vivid: {
+    Planning: '#2E7D32',
+    Design: '#1565C0',
+    Development: '#E65100',
+    Testing: '#6A1B9A',
+    Release: '#B71C1C',
+  },
+  mono: {
+    Planning: '#555555',
+    Design: '#444444',
+    Development: '#666666',
+    Testing: '#777777',
+    Release: '#333333',
+  },
 }
 
-function getSectionColor(section?: string): string {
-  if (section && SECTION_COLORS[section]) return SECTION_COLORS[section]
+function getSectionColor(section: string, colorScheme: string): string {
+  const scheme = COLOR_SCHEMES[colorScheme] || COLOR_SCHEMES.default
+  if (section && scheme[section]) return scheme[section]
   if (section) {
     let hash = 0
     for (let i = 0; i < section.length; i++) {
@@ -48,12 +84,27 @@ function addDays(date: Date, days: number): Date {
   return result
 }
 
-function formatDisplayDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+function formatDisplayDate(date: Date, dateFormat: string): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  switch (dateFormat) {
+    case 'us': return `${m}/${d}/${y}`
+    case 'eu': return `${d}.${m}.${y}`
+    default: return `${y}-${m}-${d}`
+  }
 }
 
-export function GanttStage({ tasks }: GanttStageProps) {
+export function GanttStage({ tasks, title, config }: GanttStageProps) {
+  const colorScheme = config?.colorScheme || 'default'
+  const dateFormat = config?.dateFormat || 'iso'
+  const rowHeight = config?.rowHeight || 36
+  const dayWidth = config?.dayWidth || 40
+  const showToday = config?.showToday ?? true
+  const showDependencies = config?.showDependencies ?? true
+  const showGridLines = config?.showGridLines ?? true
+  const bgTransparent = config?.bgTransparent ?? false
+  const bgColor = config?.bgColor || '#ffffff'
   const svgRef = useRef<SVGSVGElement>(null)
 
   const handleExportPNG = useCallback(() => {
@@ -119,11 +170,9 @@ export function GanttStage({ tasks }: GanttStageProps) {
   const chartEnd = addDays(maxDate, 3)
   const totalDays = Math.ceil((chartEnd.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
 
-  // Layout constants
-  const rowHeight = 36
+  // Layout constants (using config values)
   const headerHeight = 50
   const labelWidth = 180
-  const dayWidth = 40
   const chartWidth = totalDays * dayWidth
   const svgWidth = labelWidth + chartWidth + 20
   const svgHeight = headerHeight + tasks.length * rowHeight + 20
@@ -154,7 +203,10 @@ export function GanttStage({ tasks }: GanttStageProps) {
   return (
     <div className="gantt-stage">
       <div className="gantt-export-bar">
-        <span className="gantt-export-bar__info">{tasks.length} tasks • {totalDays} days</span>
+        <span className="gantt-export-bar__info">
+          {title && <strong className="gantt-export-bar__title">{title} • </strong>}
+          {tasks.length} tasks • {totalDays} days
+        </span>
         <div className="gantt-export-bar__actions">
           <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>Download PNG</button>
           <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>Download SVG</button>
@@ -169,7 +221,7 @@ export function GanttStage({ tasks }: GanttStageProps) {
           className="gantt-svg"
         >
           {/* Background */}
-          <rect width={svgWidth} height={svgHeight} fill="white" />
+          {!bgTransparent && <rect width={svgWidth} height={svgHeight} fill={bgColor} />}
 
           {/* Arrow marker definition for dependency arrows */}
           <defs>
@@ -190,12 +242,14 @@ export function GanttStage({ tasks }: GanttStageProps) {
             <rect x={0} y={0} width={svgWidth} height={headerHeight} fill="#f8f9fa" />
             {weekMarkers.map((marker, i) => (
               <g key={`week-${i}`}>
-                <line
-                  x1={marker.x} y1={headerHeight}
-                  x2={marker.x} y2={svgHeight}
-                  stroke="#e0e0e0"
-                  strokeWidth={1}
-                />
+                {showGridLines && (
+                  <line
+                    x1={marker.x} y1={headerHeight}
+                    x2={marker.x} y2={svgHeight}
+                    stroke="#e0e0e0"
+                    strokeWidth={1}
+                  />
+                )}
                 <text
                   x={marker.x + 4}
                   y={headerHeight - 8}
@@ -210,7 +264,7 @@ export function GanttStage({ tasks }: GanttStageProps) {
           </g>
 
           {/* Today marker */}
-          {showTodayMarker && (
+          {showToday && showTodayMarker && (
             <g className="gantt-today">
               <line
                 x1={todayX} y1={headerHeight}
@@ -242,7 +296,7 @@ export function GanttStage({ tasks }: GanttStageProps) {
             const durationDays = Math.ceil((taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24))
             const barX = labelWidth + startDays * dayWidth
             const barWidth = Math.max(durationDays * dayWidth, 8)
-            const color = task.color || getSectionColor(task.section)
+            const color = task.color || getSectionColor(task.section || '', colorScheme)
 
             return (
               <g key={task.id}>
@@ -282,7 +336,7 @@ export function GanttStage({ tasks }: GanttStageProps) {
                   fill={color}
                   opacity={0.85}
                 >
-                  <title>{`${task.name}: ${formatDisplayDate(taskStart)} → ${formatDisplayDate(taskEnd)} (${task.durationDays}d)`}</title>
+                  <title>{`${task.name}: ${formatDisplayDate(taskStart, dateFormat)} → ${formatDisplayDate(taskEnd, dateFormat)} (${task.durationDays}d)`}</title>
                 </rect>
 
                 {/* Duration label on bar */}
@@ -305,7 +359,7 @@ export function GanttStage({ tasks }: GanttStageProps) {
           })}
 
           {/* Dependency arrows */}
-          {tasks.map((task, i) => {
+          {showDependencies && tasks.map((task, i) => {
             if (!task.dependsOn) return null
             const depTask = tasks.find(t => t.id === task.dependsOn)
             if (!depTask) return null

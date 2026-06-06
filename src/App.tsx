@@ -6,6 +6,7 @@ import { ControlsPanel } from './components/Controls/ControlsPanel'
 import { DiagramStage } from './components/Diagram/DiagramStage'
 import { GanttInputPanel } from './components/GanttInputPanel/GanttInputPanel'
 import { GanttStage } from './components/GanttStage/GanttStage'
+import { GanttControlsPanel, DEFAULT_GANTT_CONFIG, type GanttConfig } from './components/GanttControls/GanttControlsPanel'
 import { parseDiagramInput } from './engine/parser'
 import { parseGanttInput } from './engine/ganttParser'
 import type { DiagramConfig } from './engine/types'
@@ -16,6 +17,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<DiagramTab>('sankey')
   const [inputText, setInputText] = useState('')
   const [ganttText, setGanttText] = useState('')
+  const [ganttConfig, setGanttConfig] = useState<GanttConfig>(DEFAULT_GANTT_CONFIG)
   const [config, setConfig] = useState<DiagramConfig>(DEFAULT_CONFIG)
   const [diagramVisible, setDiagramVisible] = useState(true)
 
@@ -37,6 +39,9 @@ function App() {
 
   const handleGanttChange = useCallback((value: string) => {
     setGanttText(value)
+  }, [])
+  const handleGanttConfigChange = useCallback((updates: Partial<GanttConfig>) => {
+    setGanttConfig(prev => ({ ...prev, ...updates }))
   }, [])
 
   const handleConfigChange = useCallback((updates: Partial<DiagramConfig>) => {
@@ -84,11 +89,17 @@ function App() {
 
   // Gantt sidebar
   const ganttSidebar = (
-    <GanttInputPanel
-      value={ganttText}
-      onChange={handleGanttChange}
-      errors={ganttResult.errors}
-    />
+    <>
+      <GanttInputPanel
+        value={ganttText}
+        onChange={handleGanttChange}
+        errors={ganttResult.errors}
+      />
+      <GanttControlsPanel
+        config={ganttConfig}
+        onChange={handleGanttConfigChange}
+      />
+    </>
   )
 
   // Main content based on active tab
@@ -105,6 +116,8 @@ function App() {
     <GanttStage
       tasks={ganttResult.tasks}
       projectDate={ganttResult.projectDate}
+      title={ganttResult.title}
+      config={ganttConfig}
     />
   )
 

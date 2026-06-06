@@ -60,3 +60,8 @@
   font-size: var(--text-caption-size);
   color: #666;
 }
+
+.gantt-export-bar__title {
+  font-weight: 600;
+  color: #333;
+}
