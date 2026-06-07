@@ -116,83 +116,95 @@ function dateToX(date: Date, chartStart: Date, dayWidth: number, labelWidth: num
 function generateMultiLevelHeader(
   chartStart: Date, chartEnd: Date, dayWidth: number, labelWidth: number,
   fyStartMonth: number, fyLabelType: 'fy' | 'full' | 'both',
+  timelineUnit: 'day' | 'month' | 'quarter' | 'halfyear' | 'year' = 'month',
 ): MultiLevelHeader {
   const years: HeaderLevel[] = []
   const quarters: HeaderLevel[] = []
   const months: HeaderLevel[] = []
 
+  // Determine which header levels to generate based on timelineUnit
+  const showYears = timelineUnit !== 'day'
+  const showQuarters = timelineUnit === 'month' || timelineUnit === 'quarter'
+  const showMonths = timelineUnit === 'day' || timelineUnit === 'month'
+
   // ── Year level ──
-  const yearColors = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5']
-  let yearStart = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
-  if (yearStart.getTime() > chartStart.getTime()) yearStart = new Date(chartStart.getFullYear() - 1, fyStartMonth - 1, 1)
-  let yIdx = 0
-  let yCurrent = new Date(yearStart)
-  while (yCurrent.getTime() <= chartEnd.getTime()) {
-    const nextYear = new Date(yCurrent.getFullYear() + 1, fyStartMonth - 1, 1)
-    const start = yCurrent.getTime() < chartStart.getTime() ? chartStart : yCurrent
-    const end = nextYear.getTime() > chartEnd.getTime() ? chartEnd : nextYear
-    const { fy } = getFYInfo(yCurrent, fyStartMonth)
-    years.push({
-      label: fyLabelType === 'full' ? `FY${fy}` : `FY${String(fy).slice(-2)}`,
-      x: dateToX(start, chartStart, dayWidth, labelWidth),
-      width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
-      bgColor: yearColors[yIdx % yearColors.length],
-      textColor: '#333',
-    })
-    yCurrent = nextYear
-    yIdx++
+  if (showYears) {
+    const yearColors = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5']
+    let yearStart = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
+    if (yearStart.getTime() > chartStart.getTime()) yearStart = new Date(chartStart.getFullYear() - 1, fyStartMonth - 1, 1)
+    let yIdx = 0
+    let yCurrent = new Date(yearStart)
+    while (yCurrent.getTime() <= chartEnd.getTime()) {
+      const nextYear = new Date(yCurrent.getFullYear() + 1, fyStartMonth - 1, 1)
+      const start = yCurrent.getTime() < chartStart.getTime() ? chartStart : yCurrent
+      const end = nextYear.getTime() > chartEnd.getTime() ? chartEnd : nextYear
+      const { fy } = getFYInfo(yCurrent, fyStartMonth)
+      years.push({
+        label: fyLabelType === 'full' ? `FY${fy}` : `FY${String(fy).slice(-2)}`,
+        x: dateToX(start, chartStart, dayWidth, labelWidth),
+        width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
+        bgColor: yearColors[yIdx % yearColors.length],
+        textColor: '#333',
+      })
+      yCurrent = nextYear
+      yIdx++
+    }
   }
 
   // ── Quarter level ──
-  const qColors = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5']
-  let qCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
-  if (qCurrent.getTime() > chartStart.getTime()) {
-    qCurrent = new Date(chartStart.getFullYear() - 1, fyStartMonth - 1, 1)
-  }
-  // Align to quarter boundary
-  const initMonthOffset = ((chartStart.getMonth() + 1 - fyStartMonth + 12) % 12)
-  const initQ = Math.floor(initMonthOffset / 3)
-  qCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1 + initQ * 3, 1)
-  if (qCurrent.getTime() > chartStart.getTime()) {
-    qCurrent = new Date(qCurrent.getFullYear() - 1, fyStartMonth - 1 + 3 * 3, 1)
-  }
+  if (showQuarters) {
+    const qColors = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5']
+    let qCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
+    if (qCurrent.getTime() > chartStart.getTime()) {
+      qCurrent = new Date(chartStart.getFullYear() - 1, fyStartMonth - 1, 1)
+    }
+    // Align to quarter boundary
+    const initMonthOffset = ((chartStart.getMonth() + 1 - fyStartMonth + 12) % 12)
+    const initQ = Math.floor(initMonthOffset / 3)
+    qCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1 + initQ * 3, 1)
+    if (qCurrent.getTime() > chartStart.getTime()) {
+      qCurrent = new Date(qCurrent.getFullYear() - 1, fyStartMonth - 1 + 3 * 3, 1)
+    }
 
-  let qIdx = 0
-  while (qCurrent.getTime() <= chartEnd.getTime()) {
-    const nextQ = new Date(qCurrent.getFullYear(), qCurrent.getMonth() + 3, 1)
-    const start = qCurrent.getTime() < chartStart.getTime() ? chartStart : qCurrent
-    const end = nextQ.getTime() > chartEnd.getTime() ? chartEnd : nextQ
-    const { fy, quarter } = getFYInfo(qCurrent, fyStartMonth)
-    const qLabel = fyLabelType === 'full'
-      ? `${MONTH_NAMES[qCurrent.getMonth()]}-${MONTH_NAMES[(qCurrent.getMonth() + 2) % 12]}`
-      : `Q${quarter}`
-    quarters.push({
-      label: qLabel,
-      x: dateToX(start, chartStart, dayWidth, labelWidth),
-      width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
-      bgColor: qColors[(qIdx) % qColors.length],
-      textColor: '#444',
-    })
-    qCurrent = nextQ
-    qIdx++
+    let qIdx = 0
+    while (qCurrent.getTime() <= chartEnd.getTime()) {
+      const nextQ = new Date(qCurrent.getFullYear(), qCurrent.getMonth() + 3, 1)
+      const start = qCurrent.getTime() < chartStart.getTime() ? chartStart : qCurrent
+      const end = nextQ.getTime() > chartEnd.getTime() ? chartEnd : nextQ
+      const { quarter } = getFYInfo(qCurrent, fyStartMonth)
+      const qLabel = fyLabelType === 'full'
+        ? `${MONTH_NAMES[qCurrent.getMonth()]}-${MONTH_NAMES[(qCurrent.getMonth() + 2) % 12]}`
+        : `Q${quarter}`
+      quarters.push({
+        label: qLabel,
+        x: dateToX(start, chartStart, dayWidth, labelWidth),
+        width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
+        bgColor: qColors[(qIdx) % qColors.length],
+        textColor: '#444',
+      })
+      qCurrent = nextQ
+      qIdx++
+    }
   }
 
   // ── Month level ──
-  let mCurrent = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1)
-  let mIdx = 0
-  while (mCurrent.getTime() <= chartEnd.getTime()) {
-    const nextM = new Date(mCurrent.getFullYear(), mCurrent.getMonth() + 1, 1)
-    const start = mCurrent.getTime() < chartStart.getTime() ? chartStart : mCurrent
-    const end = nextM.getTime() > chartEnd.getTime() ? chartEnd : nextM
-    months.push({
-      label: MONTH_NAMES[mCurrent.getMonth()],
-      x: dateToX(start, chartStart, dayWidth, labelWidth),
-      width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
-      bgColor: mIdx % 2 === 0 ? '#f8f9fa' : '#ffffff',
-      textColor: '#555',
-    })
-    mCurrent = nextM
-    mIdx++
+  if (showMonths) {
+    let mCurrent = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1)
+    let mIdx = 0
+    while (mCurrent.getTime() <= chartEnd.getTime()) {
+      const nextM = new Date(mCurrent.getFullYear(), mCurrent.getMonth() + 1, 1)
+      const start = mCurrent.getTime() < chartStart.getTime() ? chartStart : mCurrent
+      const end = nextM.getTime() > chartEnd.getTime() ? chartEnd : nextM
+      months.push({
+        label: MONTH_NAMES[mCurrent.getMonth()],
+        x: dateToX(start, chartStart, dayWidth, labelWidth),
+        width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
+        bgColor: mIdx % 2 === 0 ? '#f8f9fa' : '#ffffff',
+        textColor: '#555',
+      })
+      mCurrent = nextM
+      mIdx++
+    }
   }
 
   return { years, quarters, months }
@@ -276,9 +288,11 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
   const svgWidth = labelWidth + chartWidth + 20
 
   // Multi-level header
-  const header = generateMultiLevelHeader(chartStart, chartEnd, dayWidth, labelWidth, fyStartMonth, fyLabelType)
+  const header = generateMultiLevelHeader(chartStart, chartEnd, dayWidth, labelWidth, fyStartMonth, fyLabelType, timelineUnit)
   const yearRowH = 26, quarterRowH = 24, monthRowH = 22
-  const headerHeight = yearRowH + quarterRowH + monthRowH
+  const headerHeight = (header.years.length > 0 ? yearRowH : 0)
+    + (header.quarters.length > 0 ? quarterRowH : 0)
+    + (header.months.length > 0 ? monthRowH : 0)
 
   const svgHeight = headerHeight + tasks.length * rowHeight + 20
 
@@ -327,44 +341,50 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
           {/* ─── Multi-level Header ─── */}
           <g className="gantt-header">
             {/* Year row */}
-            <g>
-              {header.years.map((yr, i) => (
-                <g key={`yr-${i}`}>
-                  <rect x={yr.x} y={0} width={yr.width} height={yearRowH} fill={yr.bgColor} stroke="#ddd" strokeWidth={0.5} />
-                  <text x={yr.x + yr.width / 2} y={yearRowH / 2 + 4} fontSize={12} fill={yr.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={700}>
-                    {yr.label}
-                  </text>
-                </g>
-              ))}
-            </g>
+            {header.years.length > 0 && (
+              <g>
+                {header.years.map((yr, i) => (
+                  <g key={`yr-${i}`}>
+                    <rect x={yr.x} y={0} width={yr.width} height={yearRowH} fill={yr.bgColor} stroke="#ddd" strokeWidth={0.5} />
+                    <text x={yr.x + yr.width / 2} y={yearRowH / 2 + 4} fontSize={12} fill={yr.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={700}>
+                      {yr.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            )}
 
             {/* Quarter row */}
-            <g>
-              {header.quarters.map((q, i) => (
-                <g key={`q-${i}`}>
-                  <rect x={q.x} y={yearRowH} width={q.width} height={quarterRowH} fill={q.bgColor} stroke="#ddd" strokeWidth={0.5} />
-                  <text x={q.x + q.width / 2} y={yearRowH + quarterRowH / 2 + 4} fontSize={11} fill={q.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={600}>
-                    {q.label}
-                  </text>
-                </g>
-              ))}
-            </g>
+            {header.quarters.length > 0 && (
+              <g>
+                {header.quarters.map((q, i) => (
+                  <g key={`q-${i}`}>
+                    <rect x={q.x} y={yearRowH} width={q.width} height={quarterRowH} fill={q.bgColor} stroke="#ddd" strokeWidth={0.5} />
+                    <text x={q.x + q.width / 2} y={yearRowH + quarterRowH / 2 + 4} fontSize={11} fill={q.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={600}>
+                      {q.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            )}
 
             {/* Month row */}
-            <g>
-              {header.months.map((m, i) => (
-                <g key={`m-${i}`}>
-                  <rect x={m.x} y={yearRowH + quarterRowH} width={m.width} height={monthRowH} fill={m.bgColor} stroke="#e0e0e0" strokeWidth={0.5} />
-                  <text x={m.x + m.width / 2} y={yearRowH + quarterRowH + monthRowH / 2 + 4} fontSize={10} fill={m.textColor} textAnchor="middle" fontFamily="var(--font-sans)">
-                    {m.label}
-                  </text>
-                </g>
-              ))}
-            </g>
+            {header.months.length > 0 && (
+              <g>
+                {header.months.map((m, i) => (
+                  <g key={`m-${i}`}>
+                    <rect x={m.x} y={yearRowH + quarterRowH} width={m.width} height={monthRowH} fill={m.bgColor} stroke="#e0e0e0" strokeWidth={0.5} />
+                    <text x={m.x + m.width / 2} y={yearRowH + quarterRowH + monthRowH / 2 + 4} fontSize={10} fill={m.textColor} textAnchor="middle" fontFamily="var(--font-sans)">
+                      {m.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            )}
 
-            {/* Grid lines */}
-            {showGridLines && header.months.map((m, i) => (
-              <line key={`gl-${i}`} x1={m.x} y1={headerHeight} x2={m.x} y2={svgHeight} stroke="#e0e0e0" strokeWidth={1} />
+            {/* Grid lines — use the lowest-level header present */}
+            {showGridLines && (header.months.length > 0 ? header.months : header.quarters.length > 0 ? header.quarters : header.years).map((level, i) => (
+              <line key={`gl-${i}`} x1={level.x} y1={headerHeight} x2={level.x} y2={svgHeight} stroke="#e0e0e0" strokeWidth={1} />
             ))}
           </g>
 
