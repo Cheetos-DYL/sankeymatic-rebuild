@@ -19,13 +19,19 @@ const SAMPLE_GANTT = `gantt
     UI/UX Design        :b1, after a2, 20d
     Architecture        :b2, after a2, 15d
     
+    milestone Design Complete :after b1
+    
     section Development
     Frontend            :c1, after b1, 30d
     Backend             :c2, after b1, 35d
     
+    milestone MVP Release :after c1
+    
     section Testing
     QA Testing          :d1, after c1, 10d
-    Deployment          :d2, after d1, 5d`
+    Deployment          :d2, after d1, 5d
+    
+    milestone Production Launch :after d2`
 
 const TAB_SNIPPET = `    section 
     Task Name           :id, after prev-id, 10d`
@@ -37,6 +43,8 @@ const SNIPPETS: Record<string, string> = {
   active: `    Task Name           :active, id, after prev-id, 10d`,
   done: `    Task Name           :done, id, after prev-id, 10d`,
   crit: `    Task Name           :crit, id, after prev-id, 10d`,
+  progress: `    Task Name           :id, after prev-id, 10d, 50%`,
+  milestone: `    milestone Milestone Name :after prev-id`,
 }
 
 export function GanttInputPanel({ value, onChange, errors }: GanttInputPanelProps) {
@@ -122,6 +130,19 @@ export function GanttInputPanel({ value, onChange, errors }: GanttInputPanelProp
           <div className="syntax-guide__section">
             <h4 className="syntax-guide__heading">Date Formats</h4>
             <pre className="syntax-guide__code">{'dateFormat  YYYY-MM-DD\n2026-01-01\n2026-01-01, 15d'}</pre>
+          </div>
+
+          <div className="syntax-guide__section">
+            <h4 className="syntax-guide__heading">Progress</h4>
+            <pre className="syntax-guide__code">{'Task A  :a1, 2026-01-01, 15d, 60%   ← 60% complete\nTask B  :active, b1, after a1, 10d, 30%'}</pre>
+          </div>
+
+          <div className="syntax-guide__section">
+            <h4 className="syntax-guide__heading">Milestones</h4>
+            <pre className="syntax-guide__code">{'milestone MVP Release     :after b1\nmilestone Launch Date     :2026-06-01'}</pre>
+            <p style={{margin: '4px 0 0', fontSize: '12px', color: '#888'}}>
+              Milestones render as diamond ◆ markers (zero-duration)
+            </p>
           </div>
 
           <div className="syntax-guide__footer">

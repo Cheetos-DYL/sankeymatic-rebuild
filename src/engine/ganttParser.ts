@@ -22,6 +22,16 @@
  *   :crit     → critical path        (colored as-is)
  *   (multiple states are comma-separated before the id)
  *
+ * ─── Progress (our extension) ─────────────────────────────────────
+ *   Append NN% after the duration to indicate completion percentage.
+ *       Task :a1, 2026-01-01, 15d, 60%
+ *       Task :active, a1, 2026-01-01, 15d, 60%
+ *
+ * ─── Milestones (our extension) ──────────────────────────────────
+ *   Milestones are zero-duration markers displayed as diamond shapes.
+ *       milestone MVP Release :2026-03-15
+ *       milestone MVP Release :after b1
+ *
  * ─── Duration Units ────────────────────────────────────────────────
  *   Nd   → N days          Nw   → N weeks
  *   Nm   → N months (≈ 30d)  Nmo  → N months (≈ 30d, Mermaid style)
@@ -58,6 +68,8 @@ export interface GanttTask {
   dependsOn?: number    // numeric id of prerequisite task
   states?: TaskState[]  // Mermaid task states (active, done, crit)
   mermaidId?: string    // original Mermaid task id (e.g. "a1")
+  progress?: number     // completion percentage 0–100 (e.g. 60)
+  isMilestone?: boolean // true if this task is a milestone marker
 }
 
 export interface GanttTimelineConfig {
@@ -99,6 +111,9 @@ const SECTION_PALETTE = [
   '#00BCD4', '#795548', '#607D8B', '#E91E63', '#3F51B5',
   '#009688', '#FFC107', '#8BC34A', '#673AB7', '#CDDC39',
 ]
+
+/** Distinct color for milestones */
+const MILESTONE_COLOR = '#E91E63'
 
 /** Deterministic colour from a section name */
 function getSectionColor(section: string): string {
@@ -230,7 +245,19 @@ function parseMermaidTaskLine(
     return { task: null, error: `Invalid duration "${durationRaw}". Use Nd, Nw, Nm, Nmo, Nq, Nh, or Ny.` }
   }
 
-  return { task: { id: nextId, name: taskName, section, startDate: startRaw, durationDays, dependsOn: undefined, states, mermaidId } as Omit<GanttTask, 'color'>, error: null }
+  // ── Progress (optional trailing NN%) ──
+  let progress: number | undefined
+  if (partsIdx < parts.length) {
+    const lastPart = parts[partsIdx]
+    const pctMatch = lastPart.match(/^(\d{1,3})%$/)
+    if (pctMatch) {
+      const val = parseInt(pctMatch[1], 10)
+      progress = Math.min(Math.max(val, 0), 100)
+      partsIdx++
+    }
+  }
+
+  return { task: { id: nextId, name: taskName, section, startDate: startRaw, durationDays, dependsOn: undefined, states, mermaidId, progress } as Omit<GanttTask, 'color'>, error: null }
 }
 
 function parseMermaidInput(input: string): GanttParseResult {
@@ -255,6 +282,8 @@ function parseMermaidInput(input: string): GanttParseResult {
     startRaw: string
     durationRaw: string
     states: TaskState[]
+    progress?: number
+    isMilestone?: boolean
   }
 
   const rawTasks: RawTask[] = []
@@ -286,6 +315,35 @@ function parseMermaidInput(input: string): GanttParseResult {
     const sectionMatch = trimmed.match(/^section\s+(.+)$/i)
     if (sectionMatch) { currentSection = sectionMatch[1].trim(); continue }
 
+    // ── Milestone line ──
+    // Format: milestone Name :date  or  milestone Name :after id
+    const milestoneMatch = trimmed.match(/^milestone\s+(.+)$/i)
+    if (milestoneMatch) {
+      const rest = milestoneMatch[1].trim()
+      const colonIdx = rest.indexOf(':')
+      if (colonIdx === -1) {
+        errors.push({ line: trimmed, message: 'Milestone needs a date or dependency: milestone Name :date', row: i })
+        continue
+      }
+      const milestoneName = rest.substring(0, colonIdx).trim()
+      const milestoneSpec = rest.substring(colonIdx + 1).trim()
+
+      const milestoneId = `ms_${nextId}`
+      nextId++
+      rawTasks.push({
+        row: i,
+        name: milestoneName,
+        section: currentSection,
+        mermaidId: milestoneId,
+        startRaw: milestoneSpec,
+        durationRaw: '0d',
+        states: [],
+        progress: undefined,
+        isMilestone: true,
+      })
+      continue
+    }
+
     // ── Task line ──
     // A Mermaid task line contains a ':' somewhere after the name
     if (trimmed.includes(':')) {
@@ -304,6 +362,8 @@ function parseMermaidInput(input: string): GanttParseResult {
           startRaw: parsed.task.startDate, // may be "after xxx"
           durationRaw: trimmed.split(':').pop()?.trim() ?? '',
           states: (parsed.task as any).states ?? [],
+          progress: (parsed.task as any).progress,
+          isMilestone: false,
         })
       }
     }
@@ -314,12 +374,6 @@ function parseMermaidInput(input: string): GanttParseResult {
 
   // Re-parse each raw task to get final data
   for (const rt of rawTasks) {
-    const durationDays = parseDuration(rt.durationRaw.split(',').pop()?.trim() ?? '')
-    if (durationDays === 0) {
-      errors.push({ line: rt.name, message: `Invalid duration "${rt.durationRaw}"`, row: rt.row })
-      continue
-    }
-
     let startDate = ''
     let dependsOn: number | undefined
 
@@ -342,8 +396,29 @@ function parseMermaidInput(input: string): GanttParseResult {
       }
     }
 
-    const endDate = addDays(startDate, durationDays - 1)
-    const color = rt.section ? getSectionColor(rt.section) : '#607D8B'
+    let durationDays: number
+    let endDate: string
+    let color: string
+
+    if (rt.isMilestone) {
+      // Milestones are zero-duration point markers
+      durationDays = 0
+      endDate = startDate
+      color = MILESTONE_COLOR
+    } else {
+      // Strip trailing progress percentage (e.g. "15d, 60%" → duration is "15d")
+      const durCandidates = rt.durationRaw.split(',').map(p => p.trim()).filter(Boolean)
+      const durStr = durCandidates.length > 1 && durCandidates[durCandidates.length - 1].match(/^\d+%$/)
+        ? durCandidates[durCandidates.length - 2]
+        : durCandidates[durCandidates.length - 1] ?? ''
+      durationDays = parseDuration(durStr)
+      if (durationDays === 0) {
+        errors.push({ line: rt.name, message: `Invalid duration "${rt.durationRaw}"`, row: rt.row })
+        continue
+      }
+      endDate = addDays(startDate, durationDays - 1)
+      color = rt.section ? getSectionColor(rt.section) : '#607D8B'
+    }
 
     const task: GanttTask = {
       id: rt.name ? tasks.length + 1 : tasks.length + 1,
@@ -356,6 +431,8 @@ function parseMermaidInput(input: string): GanttParseResult {
       dependsOn,
       states: rt.states.length > 0 ? rt.states : undefined,
       mermaidId: rt.mermaidId || undefined,
+      progress: rt.progress,
+      isMilestone: rt.isMilestone,
     }
     // Assign a stable numeric id based on position in tasks array
     task.id = tasks.length + 1

@@ -11,6 +11,8 @@ interface GanttTask {
   color: string
   dependsOn?: number
   states?: string[]
+  progress?: number
+  isMilestone?: boolean
 }
 
 interface GanttStageProps {
@@ -393,13 +395,64 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
                   {task.name}
                 </text>
                 {task.section && <rect x={0} y={y} width={4} height={rowHeight} fill={color} />}
-                <rect x={barX} y={y + 6} width={barWidth} height={rowHeight - 12} rx={4} fill={color} opacity={isDone ? 0.5 : 0.85}>
-                  <title>{`${task.name}: ${formatDisplayDate(taskStart, dateFormat)} → ${formatDisplayDate(taskEnd, dateFormat)} (${task.durationDays}d)`}</title>
-                </rect>
-                {barWidth > 40 && (
-                  <text x={barX + barWidth / 2} y={y + rowHeight / 2 + 4} fontSize={11} fill="white" textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={500} pointerEvents="none">
-                    {task.durationDays}d
-                  </text>
+                {task.isMilestone ? (
+                  /* Milestone: render as a diamond ◆ shape */
+                  (() => {
+                    const diamondCx = barX + dayWidth * 0.5
+                    const diamondCy = y + rowHeight / 2
+                    const diamondSize = Math.min(rowHeight * 0.45, 12)
+                    const diamondPoints = [
+                      `${diamondCx},${diamondCy - diamondSize}`,
+                      `${diamondCx + diamondSize},${diamondCy}`,
+                      `${diamondCx},${diamondCy + diamondSize}`,
+                      `${diamondCx - diamondSize},${diamondCy}`,
+                    ].join(' ')
+                    return (
+                      <g>
+                        <polygon
+                          points={diamondPoints}
+                          fill={color}
+                          stroke="#fff"
+                          strokeWidth={1.5}
+                          opacity={isDone ? 0.5 : 1}
+                        >
+                          <title>{`${task.name}: ${formatDisplayDate(taskStart, dateFormat)}`}</title>
+                        </polygon>
+                        <text
+                          x={diamondCx + diamondSize + 6}
+                          y={y + rowHeight / 2 + 4}
+                          fontSize={11}
+                          fill={color}
+                          fontFamily="var(--font-sans)"
+                          fontWeight={600}
+                        >
+                          ◆ {task.name}
+                        </text>
+                      </g>
+                    )
+                  })()
+                ) : (
+                  <>
+                    <rect x={barX} y={y + 6} width={barWidth} height={rowHeight - 12} rx={4} fill={color} opacity={isDone ? 0.5 : 0.85}>
+                      <title>{`${task.name}: ${formatDisplayDate(taskStart, dateFormat)} → ${formatDisplayDate(taskEnd, dateFormat)} (${task.durationDays}d)`}</title>
+                    </rect>
+                    {task.progress != null && task.progress > 0 && (
+                      <rect
+                        x={barX}
+                        y={y + 6}
+                        width={Math.max(barWidth * (task.progress / 100), 2)}
+                        height={rowHeight - 12}
+                        rx={4}
+                        fill={color}
+                        opacity={1}
+                      />
+                    )}
+                    {barWidth > 40 && (
+                      <text x={barX + barWidth / 2} y={y + rowHeight / 2 + 4} fontSize={11} fill="white" textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={500} pointerEvents="none">
+                        {task.progress != null ? `${task.progress}%` : `${task.durationDays}d`}
+                      </text>
+                    )}
+                  </>
                 )}
               </g>
             )
