@@ -1,4 +1,5 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
+import { jsPDF } from 'jspdf'
 import './GanttStage.css'
 
 interface GanttTask {
@@ -247,6 +248,58 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
     const a = document.createElement('a'); a.href = url; a.download = `gantt-${Date.now()}.svg`; a.click(); URL.revokeObjectURL(url)
   }, [])
 
+  // ── PDF export with jsPDF ──
+  const [pdfPreset, setPdfPreset] = useState<'landscape' | 'portrait' | 'a4'>('landscape')
+  const handleExportPDF = useCallback(() => {
+    const svgEl = svgRef.current; if (!svgEl) return
+    const svgData = new XMLSerializer().serializeToString(svgEl)
+
+    // Render SVG to canvas for PDF embedding
+    const canvas = document.createElement('canvas')
+    const scale = 2
+    const vbW = svgEl.viewBox.baseVal.width || svgEl.clientWidth
+    const vbH = svgEl.viewBox.baseVal.height || svgEl.clientHeight
+    canvas.width = vbW * scale
+    canvas.height = vbH * scale
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+
+    const img = new Image()
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const imgData = canvas.toDataURL('image/png')
+
+      // Create PDF with appropriate orientation
+      const isLandscape = vbW > vbH
+      const orientation = pdfPreset === 'a4' ? 'portrait' : (isLandscape ? 'landscape' : 'portrait')
+      const doc = new jsPDF({ orientation, unit: 'px', format: [vbW, vbH] })
+
+      doc.addImage(imgData, 'PNG', 0, 0, vbW, vbH)
+      doc.save(`gantt-${Date.now()}.pdf`)
+    }
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+  }, [pdfPreset])
+
+  // ── PPT-ready SVG export (inline styles + xmlns + fixed pixels) ──
+  const handleExportPPT = useCallback(() => {
+    const svgEl = svgRef.current; if (!svgEl) return
+    // Clone SVG and add xmlns + inline styles for PPT compatibility
+    const clone = svgEl.cloneNode(true) as SVGSVGElement
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    // Add inline font-family fallback
+    const allTexts = clone.querySelectorAll('text')
+    allTexts.forEach(t => {
+      const currentFont = t.getAttribute('font-family') || ''
+      if (!currentFont.includes('Arial')) {
+        t.setAttribute('font-family', `${currentFont}, Arial, sans-serif`)
+      }
+    })
+    const svgData = new XMLSerializer().serializeToString(clone)
+    const blob = new Blob([svgData], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `gantt-ppt-${Date.now()}.svg`; a.click(); URL.revokeObjectURL(url)
+  }, [])
+
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (tasks.length === 0) return
@@ -318,8 +371,20 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
             const daysFromStart = Math.ceil((today.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24))
             container.scrollTo({ left: Math.max(0, daysFromStart * dayWidth - container.clientWidth / 2), behavior: 'smooth' })
           }}>Today</button>
-          <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>Download PNG</button>
-          <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>Download SVG</button>
+          <select
+            className="gantt-export-bar__select"
+            value={pdfPreset}
+            onChange={e => setPdfPreset(e.target.value as typeof pdfPreset)}
+            title="PDF page orientation"
+          >
+            <option value="landscape">📄 Landscape</option>
+            <option value="portrait">📄 Portrait</option>
+            <option value="a4">📄 A4</option>
+          </select>
+          <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>PNG</button>
+          <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>SVG</button>
+          <button className="btn-pill btn-pill--secondary" onClick={handleExportPPT}>PPT</button>
+          <button className="btn-pill btn-pill--accent" onClick={handleExportPDF}>PDF</button>
         </div>
       </div>
       <div className="gantt-stage__scroll" ref={scrollContainerRef}>
