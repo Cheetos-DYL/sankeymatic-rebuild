@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Layout } from './components/Layout/Layout'
 import { TabBar, type DiagramTab } from './components/TabBar/TabBar'
 import { InputPanel } from './components/InputPanel/InputPanel'
@@ -36,6 +36,47 @@ function App() {
   // Use ganttConfig directly — user controls timeline unit via radio buttons
   // Parser's timelineConfig is informational only (not used to override UI)
   const effectiveGanttConfig = ganttConfig
+
+  // ── URL hash persistence for Gantt ──
+  useEffect(() => {
+    // Read from URL hash on mount
+    const hash = window.location.hash.slice(1)
+    if (hash) {
+      try {
+        const params = new URLSearchParams(hash)
+        const ganttHash = params.get('gantt')
+        if (ganttHash) {
+          setGanttText(decodeURIComponent(atob(ganttHash)))
+        }
+        const configHash = params.get('ganttConfig')
+        if (configHash) {
+          const parsed = JSON.parse(decodeURIComponent(atob(configHash)))
+          setGanttConfig(prev => ({ ...prev, ...parsed }))
+        }
+      } catch {
+        // Invalid hash — ignore
+      }
+    }
+  }, [])
+
+  // Write to URL hash when Gantt state changes (debounced)
+  useEffect(() => {
+    if (!ganttText && Object.keys(ganttConfig).length === 0) return
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams()
+      if (ganttText) {
+        params.set('gantt', btoa(encodeURIComponent(ganttText)))
+      }
+      if (JSON.stringify(ganttConfig) !== JSON.stringify(DEFAULT_GANTT_CONFIG)) {
+        params.set('ganttConfig', btoa(encodeURIComponent(JSON.stringify(ganttConfig))))
+      }
+      const hash = params.toString()
+      if (hash) {
+        window.history.replaceState(null, '', `#${hash}`)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [ganttText, ganttConfig])
 
   const handleInputChange = useCallback((value: string) => {
     setInputText(value)
