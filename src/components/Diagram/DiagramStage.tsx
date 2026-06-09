@@ -73,7 +73,8 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       if (wf.operation === '*') {
         const sourceFlows = flowsBySource.get(srcName) || []
         const nonWildOutFlows = sourceFlows.filter((f: any) =>
-          (typeof f.source === 'object' ? f.source.name : String(f.source)) === srcName && !f.operation)
+          (typeof f.source === 'object' ? f.source.name : String(f.source)) === srcName && !f.operation
+        )
         let totalIn = 0
         for (const flow of layoutFlows) {
           const tgt = typeof flow.target === 'object' ? flow.target.name : String(flow.target)
@@ -84,7 +85,8 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       } else if (wf.operation === '?') {
         const targetFlows = flowsByTarget.get(tgtName) || []
         const nonWildInFlows = targetFlows.filter((f: any) =>
-          (typeof f.target === 'object' ? f.target.name : String(f.target)) === tgtName && !f.operation)
+          (typeof f.target === 'object' ? f.target.name : String(f.target)) === tgtName && !f.operation
+        )
         let totalOut = 0
         for (const flow of layoutFlows) {
           const src = typeof flow.source === 'object' ? flow.source.name : String(flow.source)
@@ -124,7 +126,10 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       }
     })
 
-    // Assign flow colors
+    // Assign flow colors — using "outside-in" logic like the original SankeyMATIC
+    const stagesArr = layout.stages()
+    const stagesMidpoint = (stagesArr.length - 1) / 2
+
     layoutFlows.forEach((f: any) => {
       const srcNode = typeof f.source === 'object' ? f.source : layoutNodes.find(n => n.name === f.source)
       const tgtNode = typeof f.target === 'object' ? f.target : layoutNodes.find(n => n.name === f.target)
@@ -132,13 +137,25 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
         f.color = srcNode.color
       } else if (config.flow_inheritfrom === 'target' && tgtNode?.color) {
         f.color = tgtNode.color
+      } else if (config.flow_inheritfrom === 'outside-in') {
+        // Outside-in: left half flows use source color, right half use target color
+        const flowMidpoint = ((srcNode?.stage ?? 0) + (tgtNode?.stage ?? 0)) / 2
+        if (flowMidpoint <= stagesMidpoint) {
+          f.color = srcNode?.color || config.flow_color
+        } else {
+          f.color = tgtNode?.color || config.flow_color
+        }
       } else {
         f.color = config.flow_color
       }
     })
 
-    // Generate flow paths as filled ribbons
+    // Generate flow paths — matching original SankeyMATIC rendering style:
+    // Curved flows use stroked paths (stroke-width = flow height)
+    // Flat flows use filled parallelogram paths
     const curvature = config.flow_curvature <= 0.1 ? 0 : config.flow_curvature
+    const flowsAreFlat = curvature === 0
+
     const flowPaths = layoutFlows
       .filter((f: any) => {
         const src = typeof f.source === 'object' ? f.source : null
@@ -149,28 +166,45 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
         const src = typeof f.source === 'object' ? f.source : null
         const tgt = typeof f.target === 'object' ? f.target : null
         if (!src || !tgt) return null
-        const sx = (src.x ?? 0) + (src.dx ?? 0)
-        const tx = tgt.x ?? 0
+
+        const sx = (src.x ?? 0) + (src.dx ?? 0) // source trailing edge
+        const tx = tgt.x ?? 0                     // target leading edge
+        const syC = (src.y ?? 0) + (f.sy ?? 0) + (f.dy ?? 0) / 2  // source flow center
+        const tyC = (tgt.y ?? 0) + (f.ty ?? 0) + (f.dy ?? 0) / 2  // target flow center
         const syTop = (src.y ?? 0) + (f.sy ?? 0)
         const syBot = syTop + (f.dy ?? 0)
         const tyTop = (tgt.y ?? 0) + (f.ty ?? 0)
         const tyBot = tyTop + (f.dy ?? 0)
+
         let d: string
-        if (curvature === 0) {
-          d = `M${sx} ${syTop} L${tx} ${tyTop} L${tx} ${tyBot} L${sx} ${syBot} Z`
+        let renderAs: 'flat' | 'curved'
+        let strokeWidth: number
+
+        if (flowsAreFlat || Math.abs(syC - tyC) < 2 || Math.abs(tx - sx) < 12) {
+          // Flat flow: parallelogram shape (filled)
+          d = `M${sx} ${syTop}v${f.dy} L${tx} ${tyBot}v${-f.dy} z`
+          renderAs = 'flat'
+          strokeWidth = 0.5
         } else {
-          const xinterp = d3.interpolateNumber(sx, tx)
-          const xcp1 = xinterp(curvature)
-          const xcp2 = xinterp(1 - curvature)
-          d = [
-            `M${sx} ${syTop}`,
-            `C${xcp1} ${syTop} ${xcp2} ${tyTop} ${tx} ${tyTop}`,
-            `L${tx} ${tyBot}`,
-            `C${xcp2} ${syBot} ${xcp1} ${tyBot} ${sx} ${syBot}`,
-            `Z`,
-          ].join(' ')
+          // Curved flow: stroked bezier curve (matching original SankeyMATIC)
+          const xinterpolate = d3.interpolateNumber(sx, tx)
+          const xcp1 = xinterpolate(curvature)
+          const xcp2 = xinterpolate(1 - curvature)
+          d = `M${sx} ${syC} C${xcp1} ${syC} ${xcp2} ${tyC} ${tx} ${tyC}`
+          renderAs = 'curved'
+          strokeWidth = Math.max(1, f.dy ?? 1)
         }
-        return { d, color: f.color || config.flow_color, opacity: config.flow_opacity }
+
+        return {
+          d,
+          color: f.color || config.flow_color,
+          opacity: config.flow_opacity,
+          renderAs,
+          strokeWidth,
+          gradientId: `grad-${f.source?.name?.replace(/[^a-zA-Z0-9]/g, '')}-${f.target?.name?.replace(/[^a-zA-Z0-9]/g, '')}-${f.index}`,
+          sourceColor: src.color || config.flow_color,
+          targetColor: tgt.color || config.flow_color,
+        }
       })
       .filter(Boolean)
 
@@ -360,9 +394,43 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
                 background: config.bg_transparent ? 'transparent' : config.bg_color,
               }}
             >
+              <defs>
+                {/* Gradient definitions for flows */}
+                {renderData?.flowPaths
+                  .filter((fp: any) => fp.renderAs === 'curved')
+                  .map((fp: any, i: number) => (
+                    <linearGradient
+                      key={`gradient-${i}`}
+                      id={fp.gradientId}
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop offset="0%" stopColor={fp.sourceColor} />
+                      <stop offset="100%" stopColor={fp.targetColor} />
+                    </linearGradient>
+                  ))}
+              </defs>
+
               <g className="diagram-flows">
                 {renderData?.flowPaths.map((fp: any, i: number) => (
-                  <path key={`flow-${i}`} d={fp.d} fill={fp.color} opacity={fp.opacity} />
+                  fp.renderAs === 'curved' ? (
+                    <path
+                      key={`flow-${i}`}
+                      d={fp.d}
+                      fill="none"
+                      stroke={fp.gradientId ? `url(#${fp.gradientId})` : fp.color}
+                      strokeWidth={fp.strokeWidth}
+                      strokeOpacity={fp.opacity}
+                      strokeLinecap="butt"
+                    />
+                  ) : (
+                    <path
+                      key={`flow-${i}`}
+                      d={fp.d}
+                      fill={fp.color}
+                      fillOpacity={fp.opacity}
+                      stroke="none"
+                    />
+                  )
                 ))}
               </g>
 
@@ -376,7 +444,7 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
                       width={n.dx ?? 0} height={n.dy ?? 0}
                       fill={n.color ?? config.node_color}
                       opacity={config.node_opacity}
-                      stroke={config.node_border > 0 ? config.node_color : 'none'}
+                      stroke={config.node_border > 0 ? (config.node_border > 0 ? d3.rgb(n.color ?? config.node_color).darker(0.8).toString() : 'none') : 'none'}
                       strokeWidth={config.node_border}
                     />
                   ))}
