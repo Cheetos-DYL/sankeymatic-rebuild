@@ -103,6 +103,27 @@
   background: #5A52E0;
 }
 
+/* Toast notification */
+.gantt-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 9999;
+  animation: gantt-toast-in 0.2s ease-out;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+@keyframes gantt-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Mobile improvements */
 @media (max-width: 768px) {
   .gantt-export-bar {

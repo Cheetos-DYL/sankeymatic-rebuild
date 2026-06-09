@@ -300,6 +300,22 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
     const a = document.createElement('a'); a.href = url; a.download = `gantt-ppt-${Date.now()}.svg`; a.click(); URL.revokeObjectURL(url)
   }, [])
 
+  // ── Share link (copy URL with hash to clipboard) ──
+  const [toastMsg, setToastMsg] = useState('')
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  const handleShareLink = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setToastMsg('🔗 Link copied!')
+      clearTimeout(toastTimer.current)
+      toastTimer.current = setTimeout(() => setToastMsg(''), 2000)
+    }).catch(() => {
+      setToastMsg('❌ Failed to copy link')
+      clearTimeout(toastTimer.current)
+      toastTimer.current = setTimeout(() => setToastMsg(''), 2000)
+    })
+  }, [])
+
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (tasks.length === 0) return
@@ -385,8 +401,12 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
           <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>SVG</button>
           <button className="btn-pill btn-pill--secondary" onClick={handleExportPPT}>PPT</button>
           <button className="btn-pill btn-pill--accent" onClick={handleExportPDF}>PDF</button>
+          <button className="btn-pill btn-pill--secondary" onClick={handleShareLink} title="Copy share link (includes chart data)">🔗</button>
         </div>
       </div>
+      {toastMsg && (
+        <div className="gantt-toast">{toastMsg}</div>
+      )}
       <div className="gantt-stage__scroll" ref={scrollContainerRef}>
         <svg ref={svgRef} width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="gantt-svg">
           {!bgTransparent && <rect width={svgWidth} height={svgHeight} fill={bgColor} />}
