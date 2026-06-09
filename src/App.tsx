@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { Layout } from './components/Layout/Layout'
 import { TabBar, type DiagramTab } from './components/TabBar/TabBar'
 import { InputPanel } from './components/InputPanel/InputPanel'
@@ -20,6 +20,7 @@ function App() {
   const [ganttConfig, setGanttConfig] = useState<GanttConfig>(DEFAULT_GANTT_CONFIG)
   const [config, setConfig] = useState<DiagramConfig>(DEFAULT_CONFIG)
   const [diagramVisible, setDiagramVisible] = useState(true)
+  const mountedRef = useRef(false)
 
   // Sankey parsing
   const parseResult = useMemo(
@@ -37,17 +38,23 @@ function App() {
   // Parser's timelineConfig is informational only (not used to override UI)
   const effectiveGanttConfig = ganttConfig
 
-  // ── URL hash persistence for Gantt ──
+  // ── URL hash persistence — read on mount ──
   useEffect(() => {
-    // Read from URL hash on mount
     const hash = window.location.hash.slice(1)
     if (hash) {
       try {
         const params = new URLSearchParams(hash)
+        // Sankey input
+        const sHash = params.get('s')
+        if (sHash) {
+          setInputText(decodeURIComponent(atob(sHash)))
+        }
+        // Gantt input
         const ganttHash = params.get('gantt')
         if (ganttHash) {
           setGanttText(decodeURIComponent(atob(ganttHash)))
         }
+        // Gantt config
         const configHash = params.get('ganttConfig')
         if (configHash) {
           const parsed = JSON.parse(decodeURIComponent(atob(configHash)))
@@ -57,13 +64,18 @@ function App() {
         // Invalid hash — ignore
       }
     }
+    mountedRef.current = true
   }, [])
 
-  // Write to URL hash when Gantt state changes (debounced)
+  // ── URL hash persistence — write on change (debounced) ──
   useEffect(() => {
-    if (!ganttText && Object.keys(ganttConfig).length === 0) return
+    if (!mountedRef.current) return
+    if (!inputText && !ganttText) return
     const timer = setTimeout(() => {
       const params = new URLSearchParams()
+      if (inputText) {
+        params.set('s', btoa(encodeURIComponent(inputText)))
+      }
       if (ganttText) {
         params.set('gantt', btoa(encodeURIComponent(ganttText)))
       }
@@ -76,7 +88,7 @@ function App() {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [ganttText, ganttConfig])
+  }, [inputText, ganttText, ganttConfig])
 
   const handleInputChange = useCallback((value: string) => {
     setInputText(value)
@@ -88,7 +100,6 @@ function App() {
   const handleGanttConfigChange = useCallback((updates: Partial<GanttConfig>) => {
     setGanttConfig(prev => ({ ...prev, ...updates }))
   }, [])
-
   const handleConfigChange = useCallback((updates: Partial<DiagramConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }))
   }, [])

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback } from 'react'
+import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import * as d3 from 'd3'
 import type {
   SankeyNode as SankeyNodeType,
@@ -20,8 +20,23 @@ interface DiagramStageProps {
 
 export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisible = true, onToggleDiagram }: DiagramStageProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const hasData = flows.length > 0 && nodes.length > 0
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!exportOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [exportOpen])
 
   const renderData = useMemo(() => {
     if (!hasData || nodes.length === 0 || flows.length === 0) return null
@@ -138,7 +153,6 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       } else if (config.flow_inheritfrom === 'target' && tgtNode?.color) {
         f.color = tgtNode.color
       } else if (config.flow_inheritfrom === 'outside-in') {
-        // Outside-in: left half flows use source color, right half use target color
         const flowMidpoint = ((srcNode?.stage ?? 0) + (tgtNode?.stage ?? 0)) / 2
         if (flowMidpoint <= stagesMidpoint) {
           f.color = srcNode?.color || config.flow_color
@@ -150,9 +164,7 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       }
     })
 
-    // Generate flow paths — matching original SankeyMATIC rendering style:
-    // Curved flows use stroked paths (stroke-width = flow height)
-    // Flat flows use filled parallelogram paths
+    // Generate flow paths — matching original SankeyMATIC rendering style
     const curvature = config.flow_curvature <= 0.1 ? 0 : config.flow_curvature
     const flowsAreFlat = curvature === 0
 
@@ -167,12 +179,11 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
         const tgt = typeof f.target === 'object' ? f.target : null
         if (!src || !tgt) return null
 
-        const sx = (src.x ?? 0) + (src.dx ?? 0) // source trailing edge
-        const tx = tgt.x ?? 0                     // target leading edge
-        const syC = (src.y ?? 0) + (f.sy ?? 0) + (f.dy ?? 0) / 2  // source flow center
-        const tyC = (tgt.y ?? 0) + (f.ty ?? 0) + (f.dy ?? 0) / 2  // target flow center
+        const sx = (src.x ?? 0) + (src.dx ?? 0)
+        const tx = tgt.x ?? 0
+        const syC = (src.y ?? 0) + (f.sy ?? 0) + (f.dy ?? 0) / 2
+        const tyC = (tgt.y ?? 0) + (f.ty ?? 0) + (f.dy ?? 0) / 2
         const syTop = (src.y ?? 0) + (f.sy ?? 0)
-        const syBot = syTop + (f.dy ?? 0)
         const tyTop = (tgt.y ?? 0) + (f.ty ?? 0)
         const tyBot = tyTop + (f.dy ?? 0)
 
@@ -181,12 +192,10 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
         let strokeWidth: number
 
         if (flowsAreFlat || Math.abs(syC - tyC) < 2 || Math.abs(tx - sx) < 12) {
-          // Flat flow: parallelogram shape (filled)
           d = `M${sx} ${syTop}v${f.dy} L${tx} ${tyBot}v${-f.dy} z`
           renderAs = 'flat'
           strokeWidth = 0.5
         } else {
-          // Curved flow: stroked bezier curve (matching original SankeyMATIC)
           const xinterpolate = d3.interpolateNumber(sx, tx)
           const xcp1 = xinterpolate(curvature)
           const xcp2 = xinterpolate(1 - curvature)
@@ -324,6 +333,7 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
       a.click()
     }
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+    setExportOpen(false)
   }, [config.size_w, config.size_h])
 
   const handleExportSVG = useCallback(() => {
@@ -337,6 +347,31 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
     a.download = `sankeymatic-${Date.now()}.svg`
     a.click()
     URL.revokeObjectURL(url)
+    setExportOpen(false)
+  }, [])
+
+  const handleShareLink = useCallback(() => {
+    const params = new URLSearchParams()
+    const hash = window.location.hash.slice(1)
+    const existingParams = new URLSearchParams(hash)
+    // Get input text from the textarea on the page
+    const textarea = document.querySelector('.input-panel__textarea') as HTMLTextAreaElement
+    const inputText = textarea?.value || ''
+    if (inputText) {
+      params.set('s', btoa(encodeURIComponent(inputText)))
+    }
+    // Preserve gantt params if they exist
+    const ganttHash = existingParams.get('gantt')
+    if (ganttHash) params.set('gantt', ganttHash)
+    const ganttConfigHash = existingParams.get('ganttConfig')
+    if (ganttConfigHash) params.set('ganttConfig', ganttConfigHash)
+
+    const newUrl = `${window.location.origin}${window.location.pathname}#${params.toString()}`
+    navigator.clipboard.writeText(newUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+    setExportOpen(false)
   }, [])
 
   return (
@@ -395,7 +430,6 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
               }}
             >
               <defs>
-                {/* Gradient definitions for flows */}
                 {renderData?.flowPaths
                   .filter((fp: any) => fp.renderAs === 'curved')
                   .map((fp: any, i: number) => (
@@ -444,7 +478,7 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
                       width={n.dx ?? 0} height={n.dy ?? 0}
                       fill={n.color ?? config.node_color}
                       opacity={config.node_opacity}
-                      stroke={config.node_border > 0 ? (config.node_border > 0 ? d3.rgb(n.color ?? config.node_color).darker(0.8).toString() : 'none') : 'none'}
+                      stroke={config.node_border > 0 ? d3.rgb(n.color ?? config.node_color).darker(0.8).toString() : 'none'}
                       strokeWidth={config.node_border}
                     />
                   ))}
@@ -471,9 +505,30 @@ export function DiagramStage({ nodes, flows, config, onInputChange, diagramVisib
               )}
             </svg>
 
+            {/* Export dropdown + Share */}
             <div className="export-bar">
-              <button className="btn-pill btn-pill--primary" onClick={handleExportPNG}>Download PNG</button>
-              <button className="btn-pill btn-pill--secondary" onClick={handleExportSVG}>Download SVG</button>
+              <div className="export-dropdown" ref={dropdownRef}>
+                <button
+                  className="btn-pill btn-pill--primary"
+                  onClick={() => setExportOpen(!exportOpen)}
+                >
+                  Export ▾
+                </button>
+                {exportOpen && (
+                  <div className="export-dropdown__menu">
+                    <button className="export-dropdown__item" onClick={handleExportPNG}>
+                      📷 PNG
+                    </button>
+                    <button className="export-dropdown__item" onClick={handleExportSVG}>
+                      🖼 SVG
+                    </button>
+                    <div className="export-dropdown__divider" />
+                    <button className="export-dropdown__item" onClick={handleShareLink}>
+                      🔗 {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )
