@@ -105,6 +105,7 @@ interface HeaderLevel {
 
 interface MultiLevelHeader {
   years: HeaderLevel[]
+  halfyears: HeaderLevel[]
   quarters: HeaderLevel[]
   months: HeaderLevel[]
 }
@@ -120,11 +121,13 @@ function generateMultiLevelHeader(
   timelineUnit: 'day' | 'month' | 'quarter' | 'halfyear' | 'year' = 'month',
 ): MultiLevelHeader {
   const years: HeaderLevel[] = []
+  const halfyears: HeaderLevel[] = []
   const quarters: HeaderLevel[] = []
   const months: HeaderLevel[] = []
 
   // Determine which header levels to generate based on timelineUnit
   const showYears = timelineUnit !== 'day'
+  const showHalfYears = timelineUnit === 'halfyear'
   const showQuarters = timelineUnit === 'month' || timelineUnit === 'quarter'
   const showMonths = timelineUnit === 'day' || timelineUnit === 'month'
 
@@ -149,6 +152,40 @@ function generateMultiLevelHeader(
       })
       yCurrent = nextYear
       yIdx++
+    }
+  }
+
+  // ── Half-Year level ──
+  if (showHalfYears) {
+    const hyColors = ['#E8F5E9', '#E3F2FD', '#FFF3E0', '#F3E5F5']
+    // Align to half-year boundary based on FY start month
+    let hyCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1, 1)
+    if (hyCurrent.getTime() > chartStart.getTime()) {
+      hyCurrent = new Date(chartStart.getFullYear() - 1, fyStartMonth - 1, 1)
+    }
+    // Align to nearest half-year (6-month block)
+    const initMonthOffset = ((chartStart.getMonth() + 1 - fyStartMonth + 12) % 12)
+    const initHy = Math.floor(initMonthOffset / 6)
+    hyCurrent = new Date(chartStart.getFullYear(), fyStartMonth - 1 + initHy * 6, 1)
+    if (hyCurrent.getTime() > chartStart.getTime()) {
+      hyCurrent = new Date(hyCurrent.getFullYear() - 1, fyStartMonth - 1 + 6, 1)
+    }
+
+    let hyIdx = 0
+    while (hyCurrent.getTime() <= chartEnd.getTime()) {
+      const nextHy = new Date(hyCurrent.getFullYear(), hyCurrent.getMonth() + 6, 1)
+      const start = hyCurrent.getTime() < chartStart.getTime() ? chartStart : hyCurrent
+      const end = nextHy.getTime() > chartEnd.getTime() ? chartEnd : nextHy
+      const hyLabel = hyIdx % 2 === 0 ? 'H1' : 'H2'
+      halfyears.push({
+        label: hyLabel,
+        x: dateToX(start, chartStart, dayWidth, labelWidth),
+        width: dateToX(end, chartStart, dayWidth, labelWidth) - dateToX(start, chartStart, dayWidth, labelWidth),
+        bgColor: hyColors[hyIdx % hyColors.length],
+        textColor: '#444',
+      })
+      hyCurrent = nextHy
+      hyIdx++
     }
   }
 
@@ -208,7 +245,7 @@ function generateMultiLevelHeader(
     }
   }
 
-  return { years, quarters, months }
+  return { years, halfyears, quarters, months }
 }
 
 /* ─── Component ─── */
@@ -342,8 +379,9 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
 
   // Multi-level header
   const header = generateMultiLevelHeader(chartStart, chartEnd, dayWidth, labelWidth, fyStartMonth, fyLabelType, timelineUnit)
-  const yearRowH = 26, quarterRowH = 24, monthRowH = 22
+  const yearRowH = 26, halfYearRowH = 24, quarterRowH = 24, monthRowH = 22
   const headerHeight = (header.years.length > 0 ? yearRowH : 0)
+    + (header.halfyears.length > 0 ? halfYearRowH : 0)
     + (header.quarters.length > 0 ? quarterRowH : 0)
     + (header.months.length > 0 ? monthRowH : 0)
 
@@ -419,13 +457,27 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
               </g>
             )}
 
+            {/* Half-Year row */}
+            {header.halfyears.length > 0 && (
+              <g>
+                {header.halfyears.map((hy, i) => (
+                  <g key={`hy-${i}`}>
+                    <rect x={hy.x} y={yearRowH} width={hy.width} height={halfYearRowH} fill={hy.bgColor} stroke="#ddd" strokeWidth={0.5} />
+                    <text x={hy.x + hy.width / 2} y={yearRowH + halfYearRowH / 2 + 4} fontSize={11} fill={hy.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={600}>
+                      {hy.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            )}
+
             {/* Quarter row */}
             {header.quarters.length > 0 && (
               <g>
                 {header.quarters.map((q, i) => (
                   <g key={`q-${i}`}>
-                    <rect x={q.x} y={yearRowH} width={q.width} height={quarterRowH} fill={q.bgColor} stroke="#ddd" strokeWidth={0.5} />
-                    <text x={q.x + q.width / 2} y={yearRowH + quarterRowH / 2 + 4} fontSize={11} fill={q.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={600}>
+                    <rect x={q.x} y={yearRowH + halfYearRowH} width={q.width} height={quarterRowH} fill={q.bgColor} stroke="#ddd" strokeWidth={0.5} />
+                    <text x={q.x + q.width / 2} y={yearRowH + halfYearRowH + quarterRowH / 2 + 4} fontSize={11} fill={q.textColor} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight={600}>
                       {q.label}
                     </text>
                   </g>
@@ -438,8 +490,8 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
               <g>
                 {header.months.map((m, i) => (
                   <g key={`m-${i}`}>
-                    <rect x={m.x} y={yearRowH + quarterRowH} width={m.width} height={monthRowH} fill={m.bgColor} stroke="#e0e0e0" strokeWidth={0.5} />
-                    <text x={m.x + m.width / 2} y={yearRowH + quarterRowH + monthRowH / 2 + 4} fontSize={10} fill={m.textColor} textAnchor="middle" fontFamily="var(--font-sans)">
+                    <rect x={m.x} y={yearRowH + halfYearRowH + quarterRowH} width={m.width} height={monthRowH} fill={m.bgColor} stroke="#e0e0e0" strokeWidth={0.5} />
+                    <text x={m.x + m.width / 2} y={yearRowH + halfYearRowH + quarterRowH + monthRowH / 2 + 4} fontSize={10} fill={m.textColor} textAnchor="middle" fontFamily="var(--font-sans)">
                       {m.label}
                     </text>
                   </g>
@@ -448,7 +500,7 @@ export function GanttStage({ tasks, title, config }: GanttStageProps) {
             )}
 
             {/* Grid lines — use the lowest-level header present */}
-            {showGridLines && (header.months.length > 0 ? header.months : header.quarters.length > 0 ? header.quarters : header.years).map((level, i) => (
+            {showGridLines && (header.months.length > 0 ? header.months : header.quarters.length > 0 ? header.quarters : header.halfyears.length > 0 ? header.halfyears : header.years).map((level, i) => (
               <line key={`gl-${i}`} x1={level.x} y1={headerHeight} x2={level.x} y2={svgHeight} stroke="#e0e0e0" strokeWidth={1} />
             ))}
           </g>
